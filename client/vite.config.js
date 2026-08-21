@@ -12,6 +12,9 @@ export default defineConfig({
       }
     }
   },
+  preview: {
+    allowedHosts: true
+  },
   build: {
     chunkSizeWarningLimit: 1600,
     rollupOptions: {
