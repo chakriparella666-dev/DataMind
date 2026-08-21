@@ -1,0 +1,181 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --primary-bg-start: #ffffff;
+  --primary-bg-end: #e2e8f0;
+  --primary-hover-start: #f8fafc;
+  --primary-hover-end: #cbd5e1;
+  --primary-glow: rgba(255, 255, 255, 0.2);
+  --primary-text: #ffffff;
+}
+
+@layer base {
+  html {
+    font-size: 15px;
+    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+    letter-spacing: -0.01em;
+  }
+  body {
+    background-color: #18181b !important;
+    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
+    font-size: 0.9375rem; /* ~15px baseline legible average font size */
+    line-height: 1.5;
+    letter-spacing: -0.01em;
+    @apply text-slate-100 font-sans antialiased selection:bg-white selection:text-black transition-colors duration-200;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+    letter-spacing: -0.02em;
+  }
+}
+
+/* Chrome/Safari Autofill Dark Mode Fix */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus, 
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 30px #18181b inset !important;
+  -webkit-text-fill-color: #ffffff !important;
+  caret-color: #ffffff !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/* Explicit High-Visibility Placeholder Styling */
+input::placeholder,
+textarea::placeholder,
+select::placeholder {
+  color: #9ca3af !important; /* Tailwind Zinc/Gray-400 */
+  opacity: 1 !important;
+}
+
+/* Light Mode Overrides */
+html.theme-light {
+  color-scheme: light;
+}
+
+html.theme-light body {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+html.theme-light aside {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html.theme-light main {
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+html.theme-light header {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+html.theme-light .bg-\[\#111318\],
+html.theme-light .bg-\[\#121419\],
+html.theme-light .bg-\[\#14161c\],
+html.theme-light .bg-slate-900,
+html.theme-light .bg-slate-950 {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+html.theme-light .bg-\[\#181a20\],
+html.theme-light .bg-\[\#1b1e27\],
+html.theme-light .bg-\[\#1e212b\],
+html.theme-light .bg-\[\#20222a\],
+html.theme-light .bg-\[\#232630\] {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04) !important;
+}
+
+html.theme-light .text-slate-400,
+html.theme-light .text-slate-300,
+html.theme-light .text-slate-200 {
+  color: #334155 !important;
+}
+
+html.theme-light .text-slate-500 {
+  color: #64748b !important;
+}
+
+html.theme-light .text-white {
+  color: #0f172a !important;
+}
+
+html.theme-light .border-slate-800,
+html.theme-light .border-slate-700,
+html.theme-light .border-slate-800\/90,
+html.theme-light .border-slate-800\/80 {
+  border-color: #e2e8f0 !important;
+}
+
+html.theme-light textarea,
+html.theme-light input {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html.theme-light textarea::placeholder,
+html.theme-light input::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* High Contrast mode */
+[data-contrast="Increased"] {
+  --tw-border-opacity: 1 !important;
+  font-weight: 600 !important;
+}
+
+/* Custom Button Effects - Pure White/Grey/Black */
+.btn-3d {
+  position: relative;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateZ(0);
+}
+
+.btn-3d-primary {
+  background: #ffffff !important;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.15);
+  transition: all 0.15s ease-out;
+  color: #000000 !important;
+  font-weight: 700 !important;
+}
+
+.btn-3d-primary:hover {
+  background: #e2e8f0 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(255, 255, 255, 0.25);
+}
+
+.btn-3d-primary:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #282b36;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3b3f4f;
+}
