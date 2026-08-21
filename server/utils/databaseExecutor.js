@@ -18,7 +18,7 @@ const runQueryOnDb = async (dataSource, sql) => {
     if (!dbKey) {
       throw new Error(`Data source '${dataSource.name}' is missing SQLite key.`);
     }
-    const result = await executeSqliteQuery(dbKey, sql, config.filePath, config.originalFileName);
+    const result = await executeSqliteQuery(dbKey, sql, dataSource.id || dataSource._id, config.originalFileName);
     return {
       data: result.rows,
       fields: result.fields,

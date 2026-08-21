@@ -30,19 +30,7 @@ const getUserIdFromReq = (req) => {
   return req.headers['x-user-id'] || req.headers['x-user-email'] || 'anonymous_guest';
 };
 
-const uploadDir = path.join(__dirname, '../uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const safeBase = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_]/g, '_');
-    cb(null, `${Date.now()}_${safeBase}${ext}`);
-  }
-});
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
@@ -122,15 +110,15 @@ router.post('/connect-postgres', async (req, res) => {
  */
 router.post('/upload-file', upload.single('file'), async (req, res) => {
   try {
-    if (!req.file) {
+    if (!req.file || !req.file.buffer) {
       return res.status(400).json({ success: false, error: 'No file uploaded.' });
     }
 
-    const { originalname, path: filePath } = req.file;
+    const { originalname, buffer, mimetype } = req.file;
     const userId = getUserIdFromReq(req);
     const dbKey = 'db_' + Date.now();
 
-    const loadedDb = await loadFileIntoSqlite(dbKey, filePath, originalname);
+    await loadFileIntoSqlite(dbKey, buffer, originalname);
     const schemaMetadata = introspectSqlite(dbKey);
 
     const ext = path.extname(originalname).toLowerCase();
@@ -140,13 +128,16 @@ router.post('/upload-file', upload.single('file'), async (req, res) => {
       name: originalname,
       type,
       connectionConfig: {
-        filePath,
         originalFileName: originalname,
         dbKey
       },
       schemaMetadata,
       userId
     });
+
+    // Save binary file into PostgreSQL BYTEA column
+    const { saveFileUpload } = require('../config/db');
+    await saveFileUpload(dataSource._id, originalname, mimetype, buffer);
 
     await generateSchemaTrainingChunks(dataSource._id.toString(), schemaMetadata, userId);
 
