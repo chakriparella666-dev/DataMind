@@ -130,6 +130,14 @@ const initAppDb = async () => {
       CREATE TABLE IF NOT EXISTS dashboards (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
+        description TEXT,
+        question TEXT,
+        sql TEXT,
+        data_source_id VARCHAR(100),
+        layout VARCHAR(50) DEFAULT '2x2 Grid',
+        date_range VARCHAR(50) DEFAULT 'Last 30 days',
+        auto_refresh VARCHAR(50) DEFAULT 'Off',
+        tags TEXT,
         visibility VARCHAR(50) DEFAULT 'Private',
         widgets INT DEFAULT 0,
         user_id VARCHAR(100) DEFAULT 'default_user',
@@ -153,6 +161,14 @@ const initAppDb = async () => {
       ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS user_id VARCHAR(100) DEFAULT 'default_user';
       ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS user_id VARCHAR(100) DEFAULT 'default_user';
       ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS user_id VARCHAR(100) DEFAULT 'default_user';
+      ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS description TEXT;
+      ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS question TEXT;
+      ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS sql TEXT;
+      ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS data_source_id VARCHAR(100);
+      ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS layout VARCHAR(50) DEFAULT '2x2 Grid';
+      ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS date_range VARCHAR(50) DEFAULT 'Last 30 days';
+      ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS auto_refresh VARCHAR(50) DEFAULT 'Off';
+      ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS tags TEXT;
       ALTER TABLE file_uploads ADD COLUMN IF NOT EXISTS user_id VARCHAR(100) DEFAULT 'default_user';
     `);
 

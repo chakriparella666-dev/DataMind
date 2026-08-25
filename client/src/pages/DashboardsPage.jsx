@@ -210,7 +210,7 @@ export default function DashboardsPage({ onNavigate }) {
                         </span>
                         <div className="flex items-center space-x-2">
                           <button
-                            onClick={() => onNavigate?.('workspace')}
+                            onClick={() => onNavigate?.('workspace', dash)}
                             className="px-3 py-1.5 bg-[#5850ec] hover:bg-[#4f46e5] text-white text-xs font-bold rounded-lg transition cursor-pointer"
                           >
                             Open

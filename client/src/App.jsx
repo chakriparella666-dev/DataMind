@@ -8,7 +8,7 @@ import DatabaseWorkspace from './pages/DatabaseWorkspace';
 import GeneralChatPage from './pages/GeneralChatPage';
 import DashboardsPage from './pages/DashboardsPage';
 import DataSourcesPage from './pages/DataSourcesPage';
-import { getMe, getDataSources } from './services/api';
+import { getMe, getDataSources, getChatSessions } from './services/api';
 
 export default function App() {
   const [activeSection, setActiveSection] = useState('landing');
@@ -18,10 +18,82 @@ export default function App() {
   const [dataSources, setDataSources] = useState([]);
   const [activeDataSource, setActiveDataSource] = useState(null);
 
-  // Database Workspace Persisted State across sidebar navigation
-  const [workspaceQuestion, setWorkspaceQuestion] = useState('');
-  const [workspaceActiveQuery, setWorkspaceActiveQuery] = useState(null);
-  const [workspaceRecentQueries, setWorkspaceRecentQueries] = useState([]);
+  // Database Workspace Persisted State across sidebar navigation & page reloads
+  const [workspaceQuestion, setWorkspaceQuestion] = useState(() => {
+    try {
+      return localStorage.getItem('datamind_workspace_question') || '';
+    } catch (e) { return ''; }
+  });
+  const [workspaceActiveQuery, setWorkspaceActiveQuery] = useState(() => {
+    try {
+      const saved = localStorage.getItem('datamind_workspace_active_query');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) { return null; }
+  });
+  const [workspaceRecentQueries, setWorkspaceRecentQueries] = useState(() => {
+    try {
+      const saved = localStorage.getItem('datamind_workspace_recent_queries');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) { return []; }
+  });
+
+  useEffect(() => {
+    try {
+      if (workspaceQuestion) {
+        localStorage.setItem('datamind_workspace_question', workspaceQuestion);
+      } else {
+        localStorage.removeItem('datamind_workspace_question');
+      }
+    } catch (e) { }
+  }, [workspaceQuestion]);
+
+  useEffect(() => {
+    try {
+      if (workspaceActiveQuery) {
+        localStorage.setItem('datamind_workspace_active_query', JSON.stringify(workspaceActiveQuery));
+      } else {
+        localStorage.removeItem('datamind_workspace_active_query');
+      }
+    } catch (e) { }
+  }, [workspaceActiveQuery]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('datamind_workspace_recent_queries', JSON.stringify(workspaceRecentQueries));
+    } catch (e) { }
+  }, [workspaceRecentQueries]);
+
+  // Fetch recent queries from database on load to restore state after refresh
+  useEffect(() => {
+    getChatSessions()
+      .then(res => {
+        if (res.success && Array.isArray(res.sessions)) {
+          const formatted = res.sessions.map(s => ({
+            id: s.sessionId || s._id || s.id,
+            question: s.question || s.title || '',
+            sql: s.sql || '',
+            explanation: s.explanation || '',
+            columns: s.columns || s.fields || [],
+            rows: s.rows || s.data || [],
+            rowCount: s.rowCount !== undefined ? s.rowCount : (s.data ? s.data.length : 0),
+            executionTimeMs: s.executionTimeMs || 180
+          })).filter(s => s.question);
+
+          if (formatted.length > 0) {
+            setWorkspaceRecentQueries(prev => {
+              const map = new Map();
+              [...prev, ...formatted].forEach(q => {
+                if (q.question) map.set(q.question.trim().toLowerCase(), q);
+              });
+              return Array.from(map.values());
+            });
+          }
+        }
+      })
+      .catch(err => {
+        console.warn('[Fetch Sessions Warning]:', err.message);
+      });
+  }, [currentUser]);
 
   // Recent chat sessions
   const [recentSessions, setRecentSessions] = useState(() => {
@@ -193,12 +265,54 @@ export default function App() {
     setIsAuthOpen(true);
   };
 
-  const handleSelectQuery = (queryObj) => {
-    const qText = typeof queryObj === 'string' ? queryObj : (queryObj.title || queryObj.lastQuestion || queryObj.question || '');
-    if (qText) {
-      setWorkspaceQuestion(qText);
+  const handleNavigate = (sec, data) => {
+    const targetSec = typeof sec === 'string' ? sec : 'workspace';
+    setActiveSection(targetSec);
+
+    if (targetSec === 'workspace' && data) {
+      let targetQuestion = data.question || data.title || '';
+      if (!targetQuestion && data.name) {
+        targetQuestion = data.name.replace(/^Analytics\s*—\s*/i, '').trim();
+      }
+      if (!targetQuestion && data.description) {
+        targetQuestion = data.description.replace(/^Generated from query:\s*/i, '').trim();
+      }
+
+      if (targetQuestion) {
+        setWorkspaceQuestion(targetQuestion);
+      }
+
+      if (data.sql || (data.rows && data.rows.length > 0) || (data.data && data.data.length > 0)) {
+        const activeObj = {
+          id: data.id || data._id || 'q_' + Date.now(),
+          question: targetQuestion || data.question || 'Database query',
+          sql: data.sql || '',
+          explanation: data.explanation || '',
+          columns: data.columns || data.fields || (data.rows && data.rows.length > 0 ? Object.keys(data.rows[0]) : []),
+          rows: data.rows || data.data || [],
+          rowCount: data.rowCount !== undefined ? data.rowCount : (data.rows ? data.rows.length : (data.data ? data.data.length : 0)),
+          executionTimeMs: data.executionTimeMs || 180
+        };
+        setWorkspaceActiveQuery(activeObj);
+      } else {
+        const match = workspaceRecentQueries.find(q =>
+          q.question && targetQuestion && q.question.trim().toLowerCase() === targetQuestion.trim().toLowerCase()
+        );
+        if (match) {
+          setWorkspaceActiveQuery(match);
+        } else if (targetQuestion) {
+          setWorkspaceActiveQuery(null);
+        }
+      }
     }
-    setActiveSection('workspace');
+  };
+
+  const handleSelectQuery = (queryObj) => {
+    if (typeof queryObj === 'string') {
+      handleNavigate('workspace', { question: queryObj });
+    } else {
+      handleNavigate('workspace', queryObj);
+    }
   };
 
   return (
@@ -249,7 +363,7 @@ export default function App() {
         {activeSection === 'home' && (
           <HomePage
             activeDataSource={activeDataSource}
-            onNavigate={(sec) => setActiveSection(sec)}
+            onNavigate={(sec) => handleNavigate(sec)}
             onSelectQuery={handleSelectQuery}
           />
         )}
@@ -276,7 +390,7 @@ export default function App() {
         )}
         {activeSection === 'dashboards' && (
           <DashboardsPage
-            onNavigate={(sec) => setActiveSection(typeof sec === 'string' ? sec : 'workspace')}
+            onNavigate={(sec, data) => handleNavigate(sec, data)}
           />
         )}
         {activeSection === 'datasources' && (

@@ -164,6 +164,9 @@ export default function DatabaseWorkspace({
         const targetDashboard = dashRes.dashboards[0];
         await updateDashboard(targetDashboard.id || targetDashboard._id, {
           name: targetDashboard.name,
+          question: activeQuery.question,
+          sql: activeQuery.sql,
+          dataSourceId: activeDataSource ? (activeDataSource._id || activeDataSource.id) : null,
           visibility: targetDashboard.visibility || 'Private',
           widgets: (targetDashboard.widgets || 0) + 1
         });
@@ -171,6 +174,9 @@ export default function DatabaseWorkspace({
         await createDashboard({
           name: `Analytics — ${activeQuery.question.slice(0, 25)}`,
           description: `Generated from query: ${activeQuery.question}`,
+          question: activeQuery.question,
+          sql: activeQuery.sql,
+          dataSourceId: activeDataSource ? (activeDataSource._id || activeDataSource.id) : null,
           visibility: 'Private',
           widgets: 1
         });

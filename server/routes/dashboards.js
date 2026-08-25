@@ -37,7 +37,7 @@ router.get('/', async (req, res) => {
 // POST /api/dashboards - Create a dashboard
 router.post('/', async (req, res) => {
   try {
-    const { name, visibility, widgets } = req.body;
+    const { name, description, question, sql, dataSourceId, layout, dateRange, autoRefresh, tags, visibility, widgets } = req.body;
     const userId = getUserIdFromReq(req);
 
     if (!name || !name.trim()) {
@@ -46,6 +46,14 @@ router.post('/', async (req, res) => {
 
     const dashboard = await Dashboard.create({
       name: name.trim(),
+      description: description ? description.trim() : null,
+      question: question ? question.trim() : null,
+      sql: sql ? sql.trim() : null,
+      dataSourceId,
+      layout,
+      dateRange,
+      autoRefresh,
+      tags,
       visibility: visibility || 'Private',
       widgets: Number(widgets) || 0,
       userId
