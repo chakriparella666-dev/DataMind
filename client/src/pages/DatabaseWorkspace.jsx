@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, AlertCircle, Terminal, FileCode2, Sparkles, Trash2, Check, ChevronDown, ChevronUp } from 'lucide-react';
+import { Download, AlertCircle, Terminal, FileCode2, Sparkles, Trash2, Check, ChevronDown, ChevronUp, X } from 'lucide-react';
 import ResultTable from '../components/ResultTable';
 import ChartRenderer from '../components/ChartRenderer';
 import { sendChatMessage, deleteChatSession, getDashboards, createDashboard, updateDashboard } from '../services/api';
@@ -234,7 +234,22 @@ export default function DatabaseWorkspace({
 
         {/* Question Card */}
         <div className="bg-[#181a20] border border-slate-800/90 rounded-2xl p-5 md:p-6 shadow-xl space-y-4">
-          <h3 className="text-sm font-bold text-slate-200">Your question</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-slate-200">Your question</h3>
+            {localQuestion && (
+              <button
+                type="button"
+                onClick={() => {
+                  updateQuestion('');
+                  if (setActiveQuery) setActiveQuery(null);
+                }}
+                className="text-xs text-zinc-400 hover:text-rose-400 font-semibold transition cursor-pointer flex items-center gap-1"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Clear question</span>
+              </button>
+            )}
+          </div>
           <form onSubmit={handleAsk} className="space-y-4">
             <textarea
               rows={3}
@@ -244,13 +259,29 @@ export default function DatabaseWorkspace({
               className="w-full bg-[#121419] border border-slate-700/80 focus:border-white focus:outline-none rounded-xl p-4 text-sm md:text-base text-white placeholder-slate-500 transition resize-none leading-relaxed"
             />
             <div className="flex items-center justify-between">
-              <button
-                type="submit"
-                disabled={querying || !localQuestion.trim()}
-                className="px-6 py-2.5 bg-white hover:bg-zinc-200 text-black font-bold text-sm rounded-xl transition cursor-pointer shadow-md active:scale-[0.98] disabled:opacity-40"
-              >
-                {querying ? 'Querying Gemini AI...' : 'Ask'}
-              </button>
+              <div className="flex items-center space-x-3">
+                <button
+                  type="submit"
+                  disabled={querying || !localQuestion.trim()}
+                  className="px-6 py-2.5 bg-white hover:bg-zinc-200 text-black font-bold text-sm rounded-xl transition cursor-pointer shadow-md active:scale-[0.98] disabled:opacity-40"
+                >
+                  {querying ? 'Querying Gemini AI...' : 'Ask'}
+                </button>
+
+                {localQuestion && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      updateQuestion('');
+                      if (setActiveQuery) setActiveQuery(null);
+                    }}
+                    className="px-4 py-2.5 bg-[#121419] hover:bg-slate-800 border border-slate-700/80 text-zinc-300 hover:text-white font-bold text-sm rounded-xl transition cursor-pointer flex items-center space-x-1.5"
+                  >
+                    <X className="w-4 h-4 text-zinc-400" />
+                    <span>Clear</span>
+                  </button>
+                )}
+              </div>
             </div>
           </form>
         </div>
