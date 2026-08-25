@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   MessageSquare, Home, LayoutDashboard, Database, Plus, Sparkles,
   ChevronDown, Settings, LogOut, Globe, Trash2,
-  FileSpreadsheet, Server, ChevronsUpDown
+  FileSpreadsheet, Server, ChevronsUpDown, X
 } from 'lucide-react';
 import SettingsModal from './SettingsModal';
 
@@ -15,7 +15,9 @@ export default function Sidebar({
   onNewChat,
   currentUser,
   onOpenAuth,
-  onLogout
+  onLogout,
+  isOpen = false,
+  onClose
 }) {
   const [isRecentOpen, setIsRecentOpen] = useState(true);
   const [showSettings, setShowSettings] = useState(false);
@@ -25,23 +27,41 @@ export default function Sidebar({
   const activeUserEmail = currentUser ? currentUser.email : 'name@gmail.com';
   const firstLetter = activeUserName.charAt(0).toUpperCase();
 
+  const handleNav = (sec) => {
+    setActiveSection(sec);
+    if (onClose) onClose();
+  };
+
   const handleOpenSettings = () => {
     setShowSettings(true);
     setShowProfileMenu(false);
+    if (onClose) onClose();
   };
 
   const handleLogOutClick = () => {
     setShowProfileMenu(false);
+    if (onClose) onClose();
     onLogout?.();
   };
 
   return (
     <>
-      <aside className="w-64 md:w-72 bg-[#111318] border-r border-slate-800/90 flex flex-col h-screen select-none font-sans shrink-0 antialiased">
+      {/* Mobile Backdrop Overlay */}
+      {isOpen && (
+        <div
+          onClick={onClose}
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-40 md:hidden animate-fadeIn"
+        />
+      )}
 
+      <aside
+        className={`fixed md:static inset-y-0 left-0 z-50 w-72 bg-[#111318] border-r border-slate-800/90 flex flex-col h-screen select-none font-sans shrink-0 antialiased transition-transform duration-300 ease-in-out ${
+          isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+        }`}
+      >
         {/* Top Brand Header */}
         <div className="p-5 border-b border-slate-800/80 flex items-center justify-between">
-          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setActiveSection('home')}>
+          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => handleNav('home')}>
             <div className="w-9 h-9 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-white font-black text-lg shadow-md">
               D
             </div>
@@ -50,12 +70,25 @@ export default function Sidebar({
               <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">AI Platform</span>
             </div>
           </div>
+
+          {/* Close Mobile Drawer Button */}
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="md:hidden p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
         </div>
 
         {/* New Chat Button */}
         <div className="p-4">
           <button
-            onClick={onNewChat}
+            onClick={() => {
+              if (onClose) onClose();
+              onNewChat?.();
+            }}
             className="w-full bg-white hover:bg-zinc-200 text-black font-black py-3 px-4 rounded-xl flex items-center justify-center space-x-2.5 shadow-md active:scale-[0.98] transition cursor-pointer text-base"
           >
             <Plus className="w-5 h-5 text-black" />
@@ -67,11 +100,12 @@ export default function Sidebar({
         <div className="px-4 space-y-1.5 overflow-y-auto flex-1">
           {/* Home */}
           <button
-            onClick={() => setActiveSection('home')}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-base font-bold transition cursor-pointer ${activeSection === 'home'
+            onClick={() => handleNav('home')}
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-base font-bold transition cursor-pointer ${
+              activeSection === 'home'
                 ? 'bg-[#181a20] text-white border border-zinc-600 shadow-sm'
                 : 'text-zinc-300 hover:text-white hover:bg-zinc-800/60'
-              }`}
+            }`}
           >
             <Home className="w-5 h-5 text-zinc-300" />
             <span>Home</span>
@@ -79,11 +113,12 @@ export default function Sidebar({
 
           {/* Database Workspace */}
           <button
-            onClick={() => setActiveSection('workspace')}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-base font-bold transition cursor-pointer ${activeSection === 'workspace'
+            onClick={() => handleNav('workspace')}
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-base font-bold transition cursor-pointer ${
+              activeSection === 'workspace'
                 ? 'bg-[#181a20] text-white border border-zinc-600 shadow-sm'
                 : 'text-zinc-300 hover:text-white hover:bg-zinc-800/60'
-              }`}
+            }`}
           >
             <Database className="w-5 h-5 text-zinc-300" />
             <span>Database Workspace</span>
@@ -91,11 +126,12 @@ export default function Sidebar({
 
           {/* Dashboards */}
           <button
-            onClick={() => setActiveSection('dashboards')}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-base font-bold transition cursor-pointer ${activeSection === 'dashboards'
+            onClick={() => handleNav('dashboards')}
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-base font-bold transition cursor-pointer ${
+              activeSection === 'dashboards'
                 ? 'bg-[#181a20] text-white border border-zinc-600 shadow-sm'
                 : 'text-zinc-300 hover:text-white hover:bg-zinc-800/60'
-              }`}
+            }`}
           >
             <LayoutDashboard className="w-5 h-5 text-zinc-300" />
             <span>Dashboards</span>
@@ -103,11 +139,12 @@ export default function Sidebar({
 
           {/* Data Sources */}
           <button
-            onClick={() => setActiveSection('datasources')}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-base font-bold transition cursor-pointer ${activeSection === 'datasources'
+            onClick={() => handleNav('datasources')}
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-base font-bold transition cursor-pointer ${
+              activeSection === 'datasources'
                 ? 'bg-[#181a20] text-white border border-zinc-600 shadow-sm'
                 : 'text-zinc-300 hover:text-white hover:bg-zinc-800/60'
-              }`}
+            }`}
           >
             <Server className="w-5 h-5 text-zinc-300" />
             <span>Data sources</span>
@@ -115,11 +152,12 @@ export default function Sidebar({
 
           {/* General AI Chatbot */}
           <button
-            onClick={() => setActiveSection('general')}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-base font-bold transition cursor-pointer ${activeSection === 'general'
+            onClick={() => handleNav('general')}
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-base font-bold transition cursor-pointer ${
+              activeSection === 'general'
                 ? 'bg-[#181a20] text-white border border-zinc-600 shadow-sm'
                 : 'text-zinc-300 hover:text-white hover:bg-zinc-800/60'
-              }`}
+            }`}
           >
             <MessageSquare className="w-5 h-5 text-zinc-300" />
             <span>General AI Chatbot</span>
@@ -127,11 +165,12 @@ export default function Sidebar({
 
           {/* Product Landing */}
           <button
-            onClick={() => setActiveSection('landing')}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-base font-bold transition cursor-pointer mt-4 border-t border-slate-800/80 pt-4 ${activeSection === 'landing'
+            onClick={() => handleNav('landing')}
+            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-base font-bold transition cursor-pointer mt-4 border-t border-slate-800/80 pt-4 ${
+              activeSection === 'landing'
                 ? 'bg-[#181a20] text-white border border-zinc-600 shadow-sm'
                 : 'text-zinc-300 hover:text-white hover:bg-zinc-800/60'
-              }`}
+            }`}
           >
             <Globe className="w-5 h-5 text-zinc-300" />
             <span>Product Landing</span>
@@ -158,7 +197,6 @@ export default function Sidebar({
           {/* Profile Dropup Menu */}
           {showProfileMenu && (
             <div className="absolute bottom-full left-4 right-4 mb-3 bg-[#181a20] border border-zinc-700/80 rounded-2xl shadow-2xl p-2.5 z-50 animate-fadeIn space-y-1.5 text-base">
-
               {/* User Tile */}
               <div
                 onClick={handleOpenSettings}
@@ -196,7 +234,11 @@ export default function Sidebar({
               ) : (
                 <button
                   type="button"
-                  onClick={() => { setShowProfileMenu(false); onOpenAuth?.(); }}
+                  onClick={() => {
+                    setShowProfileMenu(false);
+                    if (onClose) onClose();
+                    onOpenAuth?.();
+                  }}
                   className="w-full text-left px-4 py-3 rounded-xl text-white hover:bg-zinc-800 flex items-center space-x-3 transition cursor-pointer font-bold border-t border-zinc-800/80 pt-3"
                 >
                   <LogOut className="w-5 h-5 text-white" />

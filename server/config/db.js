@@ -137,10 +137,23 @@ const initAppDb = async () => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS file_uploads (
+        id SERIAL PRIMARY KEY,
+        original_name VARCHAR(255) NOT NULL,
+        file_name VARCHAR(255) NOT NULL,
+        file_type VARCHAR(50) NOT NULL,
+        file_size BIGINT DEFAULT 0,
+        created_tables JSONB DEFAULT '[]'::jsonb,
+        data_source_id VARCHAR(100),
+        user_id VARCHAR(100) DEFAULT 'default_user',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
       ALTER TABLE data_sources ADD COLUMN IF NOT EXISTS user_id VARCHAR(100) DEFAULT 'default_user';
       ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS user_id VARCHAR(100) DEFAULT 'default_user';
       ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS user_id VARCHAR(100) DEFAULT 'default_user';
       ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS user_id VARCHAR(100) DEFAULT 'default_user';
+      ALTER TABLE file_uploads ADD COLUMN IF NOT EXISTS user_id VARCHAR(100) DEFAULT 'default_user';
     `);
 
     client.release();

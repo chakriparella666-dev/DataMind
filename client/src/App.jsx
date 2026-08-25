@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Menu } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import AuthModal from './components/AuthModal';
 import LandingPage from './pages/LandingPage';
@@ -13,6 +14,7 @@ export default function App() {
   const [activeSection, setActiveSection] = useState('landing');
   const [currentUser, setCurrentUser] = useState(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [dataSources, setDataSources] = useState([]);
   const [activeDataSource, setActiveDataSource] = useState(null);
 
@@ -200,7 +202,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen w-screen bg-[#111318] text-slate-100 overflow-hidden font-sans">
+    <div className="flex h-screen w-screen bg-[#111318] text-slate-100 overflow-hidden font-sans relative">
       {/* Navigation Sidebar (Hidden on first/landing page) */}
       {activeSection !== 'landing' && (
         <Sidebar
@@ -213,11 +215,31 @@ export default function App() {
           currentUser={currentUser}
           onOpenAuth={() => setIsAuthOpen(true)}
           onLogout={handleLogout}
+          isOpen={isMobileMenuOpen}
+          onClose={() => setIsMobileMenuOpen(false)}
         />
       )}
 
       {/* Main Active Section View */}
-      <main className="flex-1 h-screen overflow-hidden flex flex-col">
+      <main className="flex-1 h-screen overflow-hidden flex flex-col min-w-0">
+        {/* Mobile Header Bar */}
+        {activeSection !== 'landing' && (
+          <div className="md:hidden bg-[#111318] border-b border-slate-800/90 px-4 py-3 flex items-center justify-between shrink-0 z-30">
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="p-2 bg-[#181a20] border border-zinc-700/80 rounded-xl text-white hover:bg-zinc-800 transition cursor-pointer"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <div className="flex items-center space-x-2.5">
+              <div className="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-white font-black text-xs">
+                D
+              </div>
+              <span className="text-base font-black text-white tracking-tight">DataMind</span>
+            </div>
+            <div className="w-9" /> {/* Spacer */}
+          </div>
+        )}
         {activeSection === 'landing' && (
           <LandingPage
             onLaunchWorkspace={() => setActiveSection('workspace')}

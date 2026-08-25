@@ -160,6 +160,27 @@ router.post('/upload-file', upload.single('file'), async (req, res) => {
 
     await generateSchemaTrainingChunks(dataSource._id.toString(), schemaMetadata, userId);
 
+    const { appQuery, isPgConnected } = require('../config/db');
+    if (isPgConnected()) {
+      try {
+        await appQuery(
+          `INSERT INTO file_uploads (original_name, file_name, file_type, file_size, created_tables, data_source_id, user_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7);`,
+          [
+            originalname,
+            req.file.filename || originalname,
+            type,
+            req.file.size || 0,
+            JSON.stringify(imported.createdTables || []),
+            String(dataSource._id || dataSource.id),
+            String(userId)
+          ]
+        );
+      } catch (dbErr) {
+        console.warn('[file_uploads table insert warning]:', dbErr.message);
+      }
+    }
+
     res.json({
       success: true,
       dataSource
