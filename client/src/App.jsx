@@ -345,7 +345,10 @@ export default function App() {
             >
               <Menu className="w-5 h-5" />
             </button>
-            <div className="flex items-center space-x-2.5">
+            <div
+              onClick={() => handleNavigate('home')}
+              className="flex items-center space-x-2.5 cursor-pointer hover:opacity-80 transition"
+            >
               <div className="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-white font-black text-xs">
                 D
               </div>

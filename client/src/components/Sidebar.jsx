@@ -55,7 +55,7 @@ export default function Sidebar({
       )}
 
       <aside
-        className={`fixed md:static inset-y-0 left-0 z-50 w-72 bg-[#111318] border-r border-slate-800/90 flex flex-col h-screen select-none font-sans shrink-0 antialiased transition-transform duration-300 ease-in-out ${
+        className={`fixed md:static inset-y-0 left-0 z-50 w-72 bg-[#111318] border-r border-slate-800/90 flex flex-col h-[100dvh] max-h-screen overflow-y-auto select-none font-sans shrink-0 antialiased transition-transform duration-300 ease-in-out ${
           isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
         }`}
       >
@@ -178,7 +178,7 @@ export default function Sidebar({
         </div>
 
         {/* User Profile Footer */}
-        <div className="p-4 border-t border-slate-800/80 relative">
+        <div className="p-4 border-t border-slate-800/80 relative mt-auto shrink-0">
           {/* User Footer Button */}
           <button
             type="button"
