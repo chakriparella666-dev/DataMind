@@ -35,17 +35,21 @@ router.get('/overview', async (req, res) => {
     let recentActivityCount = 0;
 
     if (isPgConnected()) {
-      const errRes = await appQuery(
-        `SELECT COUNT(*)::int as count FROM chat_messages WHERE error IS NOT NULL AND error != '' AND user_id = $1;`,
-        [String(userId)]
-      );
-      errorsCount = errRes.rows[0]?.count || 0;
+      try {
+        const errRes = await appQuery(
+          `SELECT COUNT(*)::int as count FROM chat_messages WHERE error IS NOT NULL AND error != '' AND user_id = $1;`,
+          [String(userId)]
+        );
+        errorsCount = errRes.rows[0]?.count || 0;
 
-      const actRes = await appQuery(
-        `SELECT COUNT(*)::int as count FROM chat_messages WHERE user_id = $1;`,
-        [String(userId)]
-      );
-      recentActivityCount = actRes.rows[0]?.count || 0;
+        const actRes = await appQuery(
+          `SELECT COUNT(*)::int as count FROM chat_messages WHERE user_id = $1;`,
+          [String(userId)]
+        );
+        recentActivityCount = actRes.rows[0]?.count || 0;
+      } catch (dbErr) {
+        console.warn('[Stats DB Query Warning]:', dbErr.message);
+      }
     }
 
     res.json({

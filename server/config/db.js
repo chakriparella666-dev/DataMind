@@ -12,12 +12,16 @@ const getAppPool = () => {
     const poolConfig = {
       connectionString: appPgConnectionString,
       statement_timeout: 10000,
-      connectionTimeoutMillis: 5000
+      connectionTimeoutMillis: 5000,
+      idleTimeoutMillis: 30000
     };
     if (isCloudPg) {
       poolConfig.ssl = { rejectUnauthorized: false };
     }
     pool = new Pool(poolConfig);
+    pool.on('error', (err) => {
+      console.warn('[PostgreSQL Pool Warning]:', err.message);
+    });
   }
   return pool;
 };
