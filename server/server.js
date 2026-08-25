@@ -21,13 +21,11 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Root URL Info Route
 app.get('/', (req, res) => {
   res.send(`
     <div style="font-family: sans-serif; text-align: center; padding: 50px; background: #0f172a; color: #f8fafc; height: 100vh;">
-      <h2>DataMind AI Server API is Running (Port 5000)</h2>
-      <p style="color: #94a3b8;">To open the full User Interface and Chatbot, please visit:</p>
-      <a href="http://localhost:3000" style="display: inline-block; background: #2563eb; color: #fff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; margin-top: 10px;">👉 Open DataMind AI Chatbot (http://localhost:3000)</a>
+      <h2 style="font-size: 28px; font-weight: bold;">DataMind AI Backend API</h2>
+      <p style="color: #94a3b8; font-size: 16px;">Service status: Active & Healthy</p>
     </div>
   `);
 });

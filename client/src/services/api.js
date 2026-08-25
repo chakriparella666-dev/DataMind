@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 // Helper to get or generate persistent guest ID for guest user isolation
 const getOrCreateGuestId = () => {

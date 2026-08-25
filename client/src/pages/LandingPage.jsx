@@ -62,7 +62,7 @@ export default function LandingPage({ onLaunchWorkspace, onOpenAuth }) {
             if (tokenResponse.error) {
               setLoading(false);
               if (tokenResponse.error === 'popup_closed_by_user') return;
-              setError('Google OAuth Error: Please add http://localhost:3000 to Authorized JavaScript origins in Google Cloud Console.');
+              setError(`Google OAuth Error: Please add ${window.location.origin} to Authorized JavaScript origins in Google Cloud Console.`);
               return;
             }
             try {
