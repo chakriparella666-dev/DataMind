@@ -29,8 +29,9 @@ const getUserIdFromReq = (req) => {
  */
 router.post('/chat', async (req, res) => {
   try {
-    const { message, sessionId = 'default_session', dataSourceId, mode = 'sql' } = req.body;
+    const { message, sessionId, dataSourceId, mode = 'sql' } = req.body;
     const userId = getUserIdFromReq(req);
+    const effectiveSessionId = (sessionId && sessionId !== 'default_session') ? sessionId : `${mode}_${userId}`;
 
     if (!message) {
       return res.status(400).json({ success: false, error: 'Message is required.' });
@@ -54,10 +55,10 @@ router.post('/chat', async (req, res) => {
 
     // Save message to session history scoped to user
     try {
-      let session = await ChatSession.findOne({ sessionId, userId });
+      let session = await ChatSession.findOne({ sessionId: effectiveSessionId, userId });
       if (!session) {
         session = await ChatSession.create({
-          sessionId,
+          sessionId: effectiveSessionId,
           title: message.slice(0, 30),
           mode,
           dataSourceId: dataSource ? (dataSource._id || dataSource.id) : null,
@@ -65,14 +66,14 @@ router.post('/chat', async (req, res) => {
         });
       }
 
-      await ChatSession.addMessage(sessionId, {
+      await ChatSession.addMessage(effectiveSessionId, {
         id: 'msg_user_' + Date.now(),
         sender: 'user',
         text: message,
         userId
       });
 
-      await ChatSession.addMessage(sessionId, {
+      await ChatSession.addMessage(effectiveSessionId, {
         id: 'msg_agent_' + Date.now(),
         sender: 'agent',
         text: agentResult.text || agentResult.explanation,

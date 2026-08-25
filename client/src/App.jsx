@@ -123,65 +123,45 @@ export default function App() {
     }
   });
 
-  // General Chat Persisted State across tab navigation
-  const [generalChatMessages, setGeneralChatMessages] = useState(() => {
-    try {
-      const saved = localStorage.getItem('datamind_general_chat_messages');
-      return saved ? JSON.parse(saved) : [
-        {
-          id: 'welcome',
-          sender: 'agent',
-          text: 'Hello! I am your General AI Assistant. Ask me SQL questions, database design advice, how to write complex joins/CTEs, or general programming help!'
-        }
-      ];
-    } catch (e) {
-      return [
-        {
-          id: 'welcome',
-          sender: 'agent',
-          text: 'Hello! I am your General AI Assistant. Ask me SQL questions, database design advice, how to write complex joins/CTEs, or general programming help!'
-        }
-      ];
-    }
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('datamind_general_chat_messages', JSON.stringify(generalChatMessages));
-    } catch (e) { }
-  }, [generalChatMessages]);
-
-  // Theme Initialization on mount
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('datamind_theme');
-    if (savedTheme === 'light') {
-      document.documentElement.classList.add('theme-light');
-    } else {
-      document.documentElement.classList.remove('theme-light');
-    }
-  }, []);
-
-  // Verify Auth on mount
-  useEffect(() => {
-    const token = localStorage.getItem('datamind_token');
-    if (token) {
-      getMe()
-        .then(res => {
-          if (res.success) {
-            setCurrentUser(res.user);
-          }
-        })
-        .catch(err => {
-          console.warn('Auth verify error:', err.message);
-        });
-    }
-  }, []);
-
   // Helper for per-user localStorage keys
   const getUserKey = (keyName) => {
-    const uid = currentUser ? (currentUser.id || currentUser.email || 'user') : 'guest';
+    const uid = currentUser ? (currentUser.id || currentUser._id || currentUser.email || 'user') : 'guest';
     return `datamind_${keyName}_${uid}`;
   };
+
+  const defaultGeneralWelcome = [
+    {
+      id: 'welcome',
+      sender: 'agent',
+      text: 'Hello! I am your General AI Assistant. Ask me SQL questions, database design advice, how to write complex joins/CTEs, or general programming help!'
+    }
+  ];
+
+  // General Chat Persisted State isolated per user
+  const [generalChatMessages, setGeneralChatMessages] = useState(defaultGeneralWelcome);
+
+  // Reload chat messages whenever user changes
+  useEffect(() => {
+    try {
+      const key = getUserKey('general_chat_messages');
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        setGeneralChatMessages(JSON.parse(saved));
+      } else {
+        setGeneralChatMessages(defaultGeneralWelcome);
+      }
+    } catch (e) {
+      setGeneralChatMessages(defaultGeneralWelcome);
+    }
+  }, [currentUser]);
+
+  // Persist general chat messages per user
+  useEffect(() => {
+    try {
+      const key = getUserKey('general_chat_messages');
+      localStorage.setItem(key, JSON.stringify(generalChatMessages));
+    } catch (e) { }
+  }, [generalChatMessages, currentUser]);
 
   // Helper to update & persist active dataset per user permanently
   const handleSelectActiveDataSource = (ds) => {
@@ -276,6 +256,7 @@ export default function App() {
     setWorkspaceQuestion('');
     setWorkspaceActiveQuery(null);
     setWorkspaceRecentQueries([]);
+    setGeneralChatMessages(defaultGeneralWelcome);
     setActiveSection('landing');
     setIsAuthOpen(true);
   };
@@ -331,7 +312,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen w-screen bg-[#111318] text-slate-100 overflow-hidden font-sans relative">
+    <div className="flex h-[100dvh] md:h-screen w-screen bg-[#111318] text-slate-100 overflow-hidden font-sans relative">
       {/* Navigation Sidebar (Hidden on first/landing page) */}
       {activeSection !== 'landing' && (
         <Sidebar
@@ -350,7 +331,7 @@ export default function App() {
       )}
 
       {/* Main Active Section View */}
-      <main className="flex-1 h-screen overflow-hidden flex flex-col min-w-0">
+      <main className="flex-1 h-[100dvh] md:h-screen overflow-hidden flex flex-col min-w-0 relative">
         {/* Mobile Header Bar */}
         {activeSection !== 'landing' && (
           <div className="md:hidden bg-[#111318] border-b border-slate-800/90 px-4 py-3 flex items-center justify-between shrink-0 z-30">
