@@ -14,10 +14,10 @@ export default function Logo({
       onClick={onClick}
       className={`flex items-center space-x-2.5 select-none ${onClick ? 'cursor-pointer' : ''}`}
     >
-      <div className={`${iconSize} rounded-xl bg-gradient-to-tr from-indigo-500 via-purple-500 to-indigo-400 p-[1.5px] shadow-md flex items-center justify-center shrink-0`}>
-        <div className="w-full h-full bg-[#18181b] rounded-[10.5px] flex items-center justify-center">
+      <div className={`${iconSize} rounded-xl bg-gradient-to-tr from-zinc-600 via-zinc-800 to-zinc-500 p-[1.5px] shadow-md flex items-center justify-center shrink-0`}>
+        <div className="w-full h-full bg-[#14161c] rounded-[10.5px] flex items-center justify-center border border-zinc-700/60">
           <svg
-            className="w-4 h-4 text-indigo-300"
+            className="w-4 h-4 text-zinc-200"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
