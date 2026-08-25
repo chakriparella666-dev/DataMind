@@ -11,12 +11,26 @@ import DataSourcesPage from './pages/DataSourcesPage';
 import { getMe, getDataSources, getChatSessions } from './services/api';
 
 export default function App() {
-  const [activeSection, setActiveSection] = useState('landing');
+  const [activeSection, setActiveSection] = useState(() => {
+    try {
+      return localStorage.getItem('datamind_active_section') || 'workspace';
+    } catch (e) {
+      return 'workspace';
+    }
+  });
   const [currentUser, setCurrentUser] = useState(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [dataSources, setDataSources] = useState([]);
   const [activeDataSource, setActiveDataSource] = useState(null);
+
+  useEffect(() => {
+    try {
+      if (activeSection) {
+        localStorage.setItem('datamind_active_section', activeSection);
+      }
+    } catch (e) { }
+  }, [activeSection]);
 
   // Database Workspace Persisted State across sidebar navigation & page reloads
   const [workspaceQuestion, setWorkspaceQuestion] = useState(() => {

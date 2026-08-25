@@ -26,6 +26,18 @@ export default function DatabaseWorkspace({
     setLocalQuestion(question || '');
   }, [question]);
 
+  // Auto-restore activeQuery from recentQueries if question is set but activeQuery is null
+  useEffect(() => {
+    if (!activeQuery && localQuestion && Array.isArray(recentQueries) && recentQueries.length > 0) {
+      const match = recentQueries.find(q =>
+        q.question && q.question.trim().toLowerCase() === localQuestion.trim().toLowerCase()
+      );
+      if (match && setActiveQuery) {
+        setActiveQuery(match);
+      }
+    }
+  }, [localQuestion, activeQuery, recentQueries, setActiveQuery]);
+
   const updateQuestion = (val) => {
     setLocalQuestion(val);
     if (setQuestion) setQuestion(val);
