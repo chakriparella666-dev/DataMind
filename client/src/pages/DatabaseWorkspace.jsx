@@ -187,15 +187,15 @@ export default function DatabaseWorkspace({
   const dbTypeDisplay = activeDataSource ? (activeDataSource.type || 'DATABASE') : 'NONE';
 
   return (
-    <div className="flex-1 h-screen bg-[#111318] text-slate-100 overflow-hidden flex flex-col md:flex-row font-sans select-none antialiased">
+    <div className="flex-1 h-[100dvh] bg-[#111318] text-slate-100 overflow-hidden flex flex-col md:flex-row font-sans select-none antialiased min-w-0 max-w-full">
       {/* Main Workspace Column */}
-      <div className="flex-1 overflow-y-auto p-5 md:p-8 space-y-6">
+      <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 min-w-0 max-w-full overflow-x-hidden">
 
         {/* Top Active Data Source Header Card */}
-        <div className="bg-[#181a20] border border-slate-800/90 rounded-2xl p-5 md:p-6 shadow-lg flex items-center justify-between">
+        <div className="bg-[#181a20] border border-slate-800/90 rounded-2xl p-4 md:p-6 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-bold text-white mb-1">Ask a question</h2>
-            <p className="text-sm text-zinc-400 font-medium">
+            <p className="text-xs md:text-sm text-zinc-400 font-medium truncate">
               {dbDisplayName} — <span className="uppercase text-white font-bold">{dbTypeDisplay}</span>
             </p>
           </div>
@@ -214,7 +214,7 @@ export default function DatabaseWorkspace({
                     setError('');
                   }
                 }}
-                className="bg-[#111318] border border-slate-700 hover:border-white text-white text-xs md:text-sm font-semibold rounded-xl px-3.5 py-2 transition cursor-pointer focus:outline-none shadow-sm"
+                className="bg-[#111318] border border-slate-700 hover:border-white text-white text-xs md:text-sm font-semibold rounded-xl px-3.5 py-2 transition cursor-pointer focus:outline-none shadow-sm max-w-full"
               >
                 {dataSources.map(ds => (
                   <option key={ds.id || ds._id} value={String(ds.id || ds._id)}>
@@ -227,7 +227,7 @@ export default function DatabaseWorkspace({
         </div>
 
         {/* Question Card */}
-        <div className="bg-[#181a20] border border-slate-800/90 rounded-2xl p-6 shadow-xl space-y-4">
+        <div className="bg-[#181a20] border border-slate-800/90 rounded-2xl p-5 md:p-6 shadow-xl space-y-4">
           <h3 className="text-sm font-bold text-slate-200">Your question</h3>
           <form onSubmit={handleAsk} className="space-y-4">
             <textarea
@@ -261,7 +261,7 @@ export default function DatabaseWorkspace({
         {activeQuery ? (
           <>
             {/* Generated SQL Box */}
-            <div className="bg-[#181a20] border border-slate-800/90 rounded-2xl p-6 shadow-xl space-y-4">
+            <div className="bg-[#181a20] border border-slate-800/90 rounded-2xl p-5 md:p-6 shadow-xl space-y-4 min-w-0 max-w-full">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
                   <FileCode2 className="w-4 h-4 text-zinc-300" />
@@ -270,8 +270,8 @@ export default function DatabaseWorkspace({
               </div>
 
               {/* Line-by-Line Formatted SQL Box */}
-              <div className="bg-[#121419] border border-slate-800 rounded-xl p-5 font-mono text-sm md:text-base text-zinc-100 overflow-x-auto leading-relaxed">
-                <pre className="whitespace-pre-wrap font-mono tracking-wide">{formatSqlLineByLine(activeQuery.sql)}</pre>
+              <div className="bg-[#121419] border border-slate-800 rounded-xl p-4 md:p-5 font-mono text-sm md:text-base text-zinc-100 max-w-full overflow-x-auto leading-relaxed">
+                <pre className="whitespace-pre-wrap break-words font-mono tracking-wide max-w-full">{formatSqlLineByLine(activeQuery.sql)}</pre>
               </div>
 
               {/* Line-by-line Easy to Understand Explanation */}

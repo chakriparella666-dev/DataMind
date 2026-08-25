@@ -134,37 +134,37 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
   };
 
   return (
-    <div className="flex-1 flex flex-col h-screen bg-[#18181b] text-slate-100 overflow-hidden font-sans select-none antialiased">
+    <div className="flex-1 flex flex-col h-[100dvh] bg-[#18181b] text-slate-100 overflow-hidden font-sans select-none antialiased min-w-0 max-w-full">
       {/* Top Header */}
-      <header className="px-6 py-4 border-b border-[#2e2e36] bg-[#222226] flex items-center justify-between shadow-md">
-        <div className="flex items-center space-x-3.5">
-          <div className="p-2.5 rounded-xl bg-[#18181b] text-white border border-[#383842] shadow-sm">
+      <header className="px-4 md:px-6 py-4 border-b border-[#2e2e36] bg-[#222226] flex items-center justify-between shadow-md shrink-0">
+        <div className="flex items-center space-x-3.5 min-w-0">
+          <div className="p-2.5 rounded-xl bg-[#18181b] text-white border border-[#383842] shadow-sm shrink-0">
             <MessageSquare className="w-6 h-6 text-white" />
           </div>
-          <div>
-            <h2 className="text-xl md:text-2xl font-extrabold text-white tracking-tight">General AI Chatbot</h2>
-            <p className="text-sm md:text-base text-indigo-400 font-semibold">Ask SQL questions, syntax help, and database advice</p>
+          <div className="min-w-0">
+            <h2 className="text-xl md:text-2xl font-extrabold text-white tracking-tight truncate">General AI Chatbot</h2>
+            <p className="text-xs md:text-base text-indigo-400 font-semibold truncate">Ask SQL questions, syntax help, and database advice</p>
           </div>
         </div>
 
         <button
           onClick={handleClearChat}
-          className="px-4 py-2 bg-[#18181b] hover:bg-rose-950/60 border border-[#383842] hover:border-rose-800/80 text-zinc-300 hover:text-rose-300 text-xs md:text-sm font-bold rounded-xl transition cursor-pointer flex items-center space-x-2 shadow-sm active:scale-[0.98]"
+          className="px-3 md:px-4 py-2 bg-[#18181b] hover:bg-rose-950/60 border border-[#383842] hover:border-rose-800/80 text-zinc-300 hover:text-rose-300 text-xs md:text-sm font-bold rounded-xl transition cursor-pointer flex items-center space-x-2 shadow-sm active:scale-[0.98] shrink-0"
         >
           <Trash2 className="w-4 h-4 text-rose-400" />
-          <span>Clear chat</span>
+          <span className="hidden sm:inline">Clear chat</span>
         </button>
       </header>
 
       {/* Messages Feed */}
-      <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6">
+      <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 min-w-0 max-w-full overflow-x-hidden">
         {messages.map(msg => (
           <div
             key={msg.id}
-            className={`flex items-start space-x-4 max-w-5xl mx-auto ${msg.sender === 'user' ? 'flex-row-reverse space-x-reverse group' : ''}`}
+            className={`flex items-start space-x-3 md:space-x-4 max-w-5xl mx-auto min-w-0 w-full ${msg.sender === 'user' ? 'flex-row-reverse space-x-reverse group' : ''}`}
           >
             <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 shadow-md ${msg.sender === 'user'
+              className={`w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 shadow-md ${msg.sender === 'user'
                   ? 'bg-white text-black font-black'
                   : 'bg-[#222226] border border-[#383842] text-white'
                 }`}
@@ -173,8 +173,8 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
             </div>
 
             {msg.sender === 'user' ? (
-              <div className="flex flex-col items-end space-y-2 max-w-xl">
-                <div className="px-5 py-4 bg-[#262630] border border-[#3d3d4d] text-slate-100 font-medium rounded-2xl rounded-tr-none text-sm md:text-base leading-relaxed shadow-lg">
+              <div className="flex flex-col items-end space-y-2 max-w-[85%] md:max-w-xl min-w-0">
+                <div className="px-4 md:px-5 py-3.5 md:py-4 bg-[#262630] border border-[#3d3d4d] text-slate-100 font-medium rounded-2xl rounded-tr-none text-sm md:text-base leading-relaxed shadow-lg break-words overflow-hidden max-w-full">
                   {msg.text}
                 </div>
                 <div className="flex items-center space-x-2 text-xs text-zinc-400 opacity-90 group-hover:opacity-100 transition-opacity">
@@ -199,7 +199,7 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
                 </div>
               </div>
             ) : (
-              <div className="px-6 py-5 bg-[#222226] border border-[#2e2e36] text-slate-100 font-medium rounded-2xl rounded-tl-none max-w-3xl leading-relaxed shadow-lg space-y-3 text-sm md:text-base">
+              <div className="px-4 md:px-6 py-4 md:py-5 bg-[#222226] border border-[#2e2e36] text-slate-100 font-medium rounded-2xl rounded-tl-none max-w-[90%] md:max-w-3xl leading-relaxed shadow-lg space-y-3 text-sm md:text-base min-w-0 overflow-hidden break-words">
                 <FormattedMarkdown content={msg.text} />
               </div>
             )}
