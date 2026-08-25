@@ -13,6 +13,8 @@ const authRouter = require('./routes/auth');
 const statsRouter = require('./routes/stats');
 const dashboardsRouter = require('./routes/dashboards');
 
+const fs = require('fs');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -21,14 +23,11 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-app.get('/', (req, res) => {
-  res.send(`
-    <div style="font-family: sans-serif; text-align: center; padding: 50px; background: #0f172a; color: #f8fafc; height: 100vh;">
-      <h2 style="font-size: 28px; font-weight: bold;">DataMind AI Backend API</h2>
-      <p style="color: #94a3b8; font-size: 16px;">Service status: Active & Healthy</p>
-    </div>
-  `);
-});
+// Serve static assets from frontend build if client/dist exists
+const clientBuildPath = path.join(__dirname, '../client/dist');
+if (fs.existsSync(clientBuildPath)) {
+  app.use(express.static(clientBuildPath));
+}
 
 // Healthcheck
 app.get('/api/health', (req, res) => {
@@ -42,6 +41,27 @@ app.use('/api/agent', agentRouter);
 app.use('/api/training', trainingRouter);
 app.use('/api/stats', statsRouter);
 app.use('/api/dashboards', dashboardsRouter);
+
+// Catch-all route to serve Frontend index.html or dynamic info page
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    return next();
+  }
+  const indexPath = path.join(clientBuildPath, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    return res.sendFile(indexPath);
+  }
+  
+  const host = req.headers.host || `localhost:${PORT}`;
+  const protocol = req.headers['x-forwarded-proto'] || 'http';
+  res.send(`
+    <div style="font-family: sans-serif; text-align: center; padding: 50px; background: #0f172a; color: #f8fafc; min-height: 100vh;">
+      <h2>🚀 DataMind AI Server API is Running</h2>
+      <p style="color: #94a3b8;">Service URL: ${protocol}://${host}</p>
+      <p style="color: #64748b;">Frontend build static files serve automatically when deployed.</p>
+    </div>
+  `);
+});
 
 // Start Server
 const startServer = async () => {
