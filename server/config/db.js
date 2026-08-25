@@ -133,15 +133,6 @@ const initAppDb = async () => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
-      CREATE TABLE IF NOT EXISTS file_uploads (
-        id SERIAL PRIMARY KEY,
-        data_source_id INT REFERENCES data_sources(id) ON DELETE CASCADE,
-        original_name VARCHAR(255) NOT NULL,
-        mime_type VARCHAR(100),
-        file_data BYTEA NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
       ALTER TABLE data_sources ADD COLUMN IF NOT EXISTS user_id VARCHAR(100) DEFAULT 'default_user';
       ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS user_id VARCHAR(100) DEFAULT 'default_user';
       ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS user_id VARCHAR(100) DEFAULT 'default_user';
@@ -167,37 +158,9 @@ const appQuery = async (text, params = []) => {
   return await p.query(text, params);
 };
 
-const saveFileUpload = async (dataSourceId, originalName, mimeType, fileBuffer) => {
-  if (!isPgConnected()) return null;
-  const numId = parseInt(dataSourceId, 10);
-  const res = await appQuery(
-    `INSERT INTO file_uploads (data_source_id, original_name, mime_type, file_data)
-     VALUES ($1, $2, $3, $4)
-     RETURNING id;`,
-    [numId, originalName, mimeType || 'application/octet-stream', fileBuffer]
-  );
-  return res.rows[0]?.id;
-};
-
-const getFileUploadByDataSourceId = async (dataSourceId) => {
-  if (!isPgConnected()) return null;
-  const numId = parseInt(dataSourceId, 10);
-  if (isNaN(numId)) return null;
-  const res = await appQuery(
-    `SELECT original_name AS "originalName", mime_type AS "mimeType", file_data AS "fileBuffer"
-     FROM file_uploads
-     WHERE data_source_id = $1
-     ORDER BY created_at DESC LIMIT 1;`,
-    [numId]
-  );
-  return res.rows[0] || null;
-};
-
 module.exports = {
   getAppPool,
   initAppDb,
   appQuery,
-  saveFileUpload,
-  getFileUploadByDataSourceId,
   isPgConnected: () => isPgConnected
 };

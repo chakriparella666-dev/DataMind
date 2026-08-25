@@ -78,7 +78,8 @@ export default function DatabaseWorkspace({
         }
 
         const rowsData = agentResult.data || agentResult.rows || [];
-        const colsData = agentResult.fields || (rowsData.length > 0 ? Object.keys(rowsData[0]) : []);
+        const rawFields = agentResult.fields || (rowsData.length > 0 ? Object.keys(rowsData[0]) : []);
+        const colsData = Array.isArray(rawFields) ? rawFields.map(f => (typeof f === 'string' ? f : (f?.name || String(f)))) : [];
 
         const formattedSql = formatSqlLineByLine(agentResult.sql);
 
@@ -142,7 +143,7 @@ export default function DatabaseWorkspace({
   const handleDownloadCSV = () => {
     if (!activeQuery || !activeQuery.rows || activeQuery.rows.length === 0) return;
     const keys = activeQuery.columns && activeQuery.columns.length > 0 ? activeQuery.columns : Object.keys(activeQuery.rows[0]);
-    const csvContent = "data:text/csv;charset=utf-8," 
+    const csvContent = "data:text/csv;charset=utf-8,"
       + [keys.join(","), ...activeQuery.rows.map(row => keys.map(k => `"${row[k] || ''}"`).join(","))].join("\n");
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -158,13 +159,22 @@ export default function DatabaseWorkspace({
   const handleAddToDashboard = async () => {
     if (!activeQuery) return;
     try {
-      const sqlSnippet = activeQuery.sql ? activeQuery.sql.replace(/\s+/g, ' ').trim() : '';
-      await createDashboard({
-        name: activeQuery.question,
-        description: `SQL: ${sqlSnippet} · ${activeQuery.rowCount !== undefined ? activeQuery.rowCount : 0} rows`,
-        visibility: 'Private',
-        widgets: 1
-      });
+      const dashRes = await getDashboards();
+      if (dashRes.success && Array.isArray(dashRes.dashboards) && dashRes.dashboards.length > 0) {
+        const targetDashboard = dashRes.dashboards[0];
+        await updateDashboard(targetDashboard.id || targetDashboard._id, {
+          name: targetDashboard.name,
+          visibility: targetDashboard.visibility || 'Private',
+          widgets: (targetDashboard.widgets || 0) + 1
+        });
+      } else {
+        await createDashboard({
+          name: `Analytics — ${activeQuery.question.slice(0, 25)}`,
+          description: `Generated from query: ${activeQuery.question}`,
+          visibility: 'Private',
+          widgets: 1
+        });
+      }
 
       setAddedSuccess(true);
       setTimeout(() => setAddedSuccess(false), 3000);
@@ -180,38 +190,35 @@ export default function DatabaseWorkspace({
     <div className="flex-1 h-screen bg-[#111318] text-slate-100 overflow-hidden flex flex-col md:flex-row font-sans select-none antialiased">
       {/* Main Workspace Column */}
       <div className="flex-1 overflow-y-auto p-5 md:p-8 space-y-6">
-        
+
         {/* Top Active Data Source Header Card */}
-        <div className="bg-[#181a20] border border-slate-800/90 rounded-2xl p-6 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="bg-[#181a20] border border-slate-800/90 rounded-2xl p-5 md:p-6 shadow-lg flex items-center justify-between">
           <div>
             <h2 className="text-lg font-bold text-white mb-1">Ask a question</h2>
-            <p className="text-sm text-zinc-400 font-medium flex items-center gap-2">
-              <span>{dbDisplayName}</span>
-              <span>—</span>
-              <span className="uppercase text-indigo-400 font-bold">{dbTypeDisplay}</span>
+            <p className="text-sm text-zinc-400 font-medium">
+              {dbDisplayName} — <span className="uppercase text-white font-bold">{dbTypeDisplay}</span>
             </p>
           </div>
 
-          {/* Quick Active Database Selector */}
-          {dataSources.length > 0 && (
-            <div className="flex items-center space-x-2.5 shrink-0">
-              <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider hidden sm:inline">
-                Active Database:
-              </span>
+          {Array.isArray(dataSources) && dataSources.length > 0 && (
+            <div className="flex items-center space-x-2">
+              <label htmlFor="ds-selector" className="text-xs font-semibold text-zinc-400 hidden sm:inline">Active Dataset:</label>
               <select
-                value={activeDataSource ? (activeDataSource._id || activeDataSource.id) : ''}
+                id="ds-selector"
+                value={activeDataSource ? String(activeDataSource.id || activeDataSource._id) : ''}
                 onChange={(e) => {
                   const selectedId = e.target.value;
-                  const found = dataSources.find(ds => String(ds._id || ds.id) === String(selectedId));
+                  const found = dataSources.find(ds => String(ds.id || ds._id) === selectedId);
                   if (found && setActiveDataSource) {
                     setActiveDataSource(found);
+                    setError('');
                   }
                 }}
-                className="bg-[#121419] border border-slate-700/80 hover:border-slate-500 text-white font-bold text-sm rounded-xl px-3.5 py-2 focus:outline-none transition cursor-pointer"
+                className="bg-[#111318] border border-slate-700 hover:border-white text-white text-xs md:text-sm font-semibold rounded-xl px-3.5 py-2 transition cursor-pointer focus:outline-none shadow-sm"
               >
-                {dataSources.map((ds) => (
-                  <option key={ds._id || ds.id} value={ds._id || ds.id}>
-                    {ds.name} ({String(ds.type).toUpperCase()})
+                {dataSources.map(ds => (
+                  <option key={ds.id || ds._id} value={String(ds.id || ds._id)}>
+                    {ds.name} ({ds.type || 'DATABASE'})
                   </option>
                 ))}
               </select>
@@ -311,11 +318,10 @@ export default function DatabaseWorkspace({
                   <button
                     type="button"
                     onClick={handleAddToDashboard}
-                    className={`px-5 py-2 font-bold text-sm rounded-xl transition cursor-pointer shadow-md active:scale-[0.98] flex items-center gap-2 ${
-                      addedSuccess
+                    className={`px-5 py-2 font-bold text-sm rounded-xl transition cursor-pointer shadow-md active:scale-[0.98] flex items-center gap-2 ${addedSuccess
                         ? 'bg-emerald-500 text-white'
                         : 'bg-white hover:bg-zinc-200 text-black'
-                    }`}
+                      }`}
                   >
                     {addedSuccess ? (
                       <>
@@ -378,11 +384,10 @@ export default function DatabaseWorkspace({
               <div
                 key={item.id}
                 onClick={() => handleSelectRecent(item)}
-                className={`p-3.5 rounded-xl border transition cursor-pointer relative group ${
-                  activeQuery?.question === item.question
+                className={`p-3.5 rounded-xl border transition cursor-pointer relative group ${activeQuery?.question === item.question
                     ? 'bg-[#1b1e27] border-white text-white'
                     : 'bg-[#181a20] border-slate-800/80 hover:border-slate-700 text-slate-300'
-                }`}
+                  }`}
               >
                 <div className="flex items-start justify-between gap-2 mb-1.5">
                   <p className="text-sm font-bold text-slate-200 line-clamp-2 pr-1">

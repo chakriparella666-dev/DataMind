@@ -41,8 +41,6 @@ export default function HomePage({ activeDataSource, onNavigate, onSelectQuery }
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 10000);
-    return () => clearInterval(interval);
   }, []);
 
   return (

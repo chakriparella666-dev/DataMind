@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronUp, Eye, EyeOff, AlertCircle, X } from 'lucide-react';
 import { loginUser, registerUser, googleAuth } from '../services/api';
+
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '274171578355-21jalpdk5koqa2q40ush34p2r4oq25ck.apps.googleusercontent.com';
 
 export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
   const [isRegister, setIsRegister] = useState(false);
@@ -15,43 +17,13 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  if (!isOpen) return null;
-
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const handleGoogleAuthClick = async () => {
+  const handleCredentialResponse = async (response) => {
     setLoading(true);
     setError(null);
     try {
-      if (window.google?.accounts?.id) {
-        window.google.accounts.id.prompt();
-        setLoading(false);
-        return;
-      }
-
-      const emailPrompt = window.prompt("Enter your Google Account email:", "alex.dev@gmail.com");
-      if (!emailPrompt) {
-        setLoading(false);
-        return;
-      }
-
-      const name = emailPrompt.split('@')[0];
-      const formattedName = name.charAt(0).toUpperCase() + name.slice(1);
-
-      const res = await googleAuth({
-        email: emailPrompt,
-        name: formattedName,
-        googleId: 'google_' + Date.now(),
-        avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(formattedName)}`
-      });
-
+      const res = await googleAuth({ credential: response.credential });
       if (res.success) {
         localStorage.setItem('datamind_token', res.token);
-        if (res.user) {
-          localStorage.setItem('datamind_user', JSON.stringify(res.user));
-        }
         onAuthSuccess(res.user);
         onClose();
       } else {
@@ -62,6 +34,125 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
     } finally {
       setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    if (isOpen && window.google?.accounts?.id) {
+      try {
+        window.google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: handleCredentialResponse,
+          auto_select: false
+        });
+      } catch (e) {
+        console.warn('[Google GSI Init Warning]:', e);
+      }
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleGoogleAuthClick = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      // 1. Official Google OAuth2 Token Client (Opens Google Sign-in popup window)
+      if (window.google?.accounts?.oauth2) {
+        const tokenClient = window.google.accounts.oauth2.initTokenClient({
+          client_id: GOOGLE_CLIENT_ID,
+          scope: 'email profile openid',
+          callback: async (tokenResponse) => {
+            if (tokenResponse.error) {
+              setLoading(false);
+              if (tokenResponse.error === 'popup_closed_by_user') return;
+              setError('Google OAuth Error: Please add http://localhost:3000 to Authorized JavaScript origins in Google Cloud Console.');
+              return;
+            }
+            try {
+              const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
+              });
+              const profile = await userInfoRes.json();
+              if (profile.email) {
+                const res = await googleAuth({
+                  email: profile.email,
+                  name: profile.name || profile.given_name || profile.email.split('@')[0],
+                  googleId: profile.sub,
+                  avatar: profile.picture
+                });
+                if (res.success) {
+                  localStorage.setItem('datamind_token', res.token);
+                  onAuthSuccess(res.user);
+                  onClose();
+                } else {
+                  setError(res.error || 'Google authentication failed');
+                }
+              } else {
+                setError('Could not retrieve Google profile details.');
+              }
+            } catch (err) {
+              setError(err.message || 'Failed to authenticate with Google');
+            } finally {
+              setLoading(false);
+            }
+          }
+        });
+        tokenClient.requestAccessToken({ prompt: 'select_account' });
+        return;
+      }
+
+      // 2. Google GSI One Tap fallback
+      if (window.google?.accounts?.id) {
+        window.google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: handleCredentialResponse
+        });
+        window.google.accounts.id.prompt((notification) => {
+          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+            fallbackGooglePrompt();
+          }
+        });
+        setLoading(false);
+        return;
+      }
+
+      fallbackGooglePrompt();
+    } catch (err) {
+      console.warn('[Google Auth Popup Warning]:', err);
+      fallbackGooglePrompt();
+    }
+  };
+
+  const fallbackGooglePrompt = async () => {
+    const emailPrompt = window.prompt("Enter your Google Account email:", "alex.dev@gmail.com");
+    if (!emailPrompt) {
+      setLoading(false);
+      return;
+    }
+
+    const name = emailPrompt.split('@')[0];
+    const formattedName = name.charAt(0).toUpperCase() + name.slice(1);
+
+    const res = await googleAuth({
+      email: emailPrompt,
+      name: formattedName,
+      googleId: 'google_' + Date.now(),
+      avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(formattedName)}`
+    });
+
+    if (res.success) {
+      localStorage.setItem('datamind_token', res.token);
+      onAuthSuccess(res.user);
+      onClose();
+    } else {
+      setError(res.error || 'Google authentication failed');
+    }
+    setLoading(false);
   };
 
   const handleSubmit = async (e) => {
@@ -88,9 +179,6 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
 
       if (res.success) {
         localStorage.setItem('datamind_token', res.token);
-        if (res.user) {
-          localStorage.setItem('datamind_user', JSON.stringify(res.user));
-        }
         onAuthSuccess(res.user);
         onClose();
       } else {

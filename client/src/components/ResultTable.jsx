@@ -10,7 +10,8 @@ export default function ResultTable({ data = [], fields = [], question, sql, dat
 
   if (!data || data.length === 0) return null;
 
-  const colKeys = fields && fields.length > 0 ? fields : Object.keys(data[0]);
+  const rawKeys = fields && fields.length > 0 ? fields : Object.keys(data[0] || {});
+  const colKeys = rawKeys.map(f => (typeof f === 'string' ? f : (f?.name || String(f))));
 
   const totalPages = Math.ceil(data.length / pageSize);
   const startIndex = (currentPage - 1) * pageSize;
@@ -76,11 +77,10 @@ export default function ResultTable({ data = [], fields = [], question, sql, dat
             <button
               onClick={handleSaveToTraining}
               disabled={saved || saving}
-              className={`text-xs px-3.5 py-2 rounded-xl flex items-center space-x-2 font-semibold transition cursor-pointer ${
-                saved
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 cursor-default'
-                  : 'bg-[#1e212b] hover:bg-slate-800 text-slate-200 border border-slate-700/80'
-              }`}
+              className={`text-xs px-3.5 py-2 rounded-xl flex items-center space-x-2 font-semibold transition cursor-pointer ${saved
+                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 cursor-default'
+                : 'bg-[#1e212b] hover:bg-slate-800 text-slate-200 border border-slate-700/80'
+                }`}
               title="Save this question & verified SQL pair into RAG training dataset"
             >
               {saved ? (

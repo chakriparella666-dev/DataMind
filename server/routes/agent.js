@@ -90,8 +90,13 @@ router.post('/chat', async (req, res) => {
       console.warn('[Session Save Warning]:', dbErr.message);
     }
 
+    const responseText = agentResult.text || agentResult.explanation || agentResult.reply || agentResult.message;
+
     res.json({
       success: true,
+      text: responseText,
+      reply: responseText,
+      message: responseText,
       result: agentResult
     });
   } catch (error) {

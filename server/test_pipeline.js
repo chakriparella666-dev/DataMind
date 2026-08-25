@@ -65,7 +65,7 @@ const runTests = async () => {
       testPassed = false;
     }
 
-    const queryRes = executeSqliteQuery(dbKey, 'SELECT city, sales FROM test_sales ORDER BY sales DESC');
+    const queryRes = await executeSqliteQuery(dbKey, 'SELECT city, sales FROM test_sales ORDER BY sales DESC');
     if (queryRes.rows && queryRes.rows.length === 5) {
       console.log(`  ✅ Query execution returned ${queryRes.rowCount} rows cleanly.`);
     } else {

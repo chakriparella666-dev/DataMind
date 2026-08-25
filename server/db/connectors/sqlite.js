@@ -17,32 +17,18 @@ const getSQL = async () => {
 /**
  * Load CSV or Excel file into an in-memory SQLite database via sql.js (pure WASM)
  */
-const loadFileIntoSqlite = async (dbKey, fileInput, originalName) => {
+const loadFileIntoSqlite = async (dbKey, filePath, originalName) => {
   const SqlInstance = await getSQL();
   const db = new SqlInstance.Database();
-  const fileName = originalName || (typeof fileInput === 'string' ? fileInput : 'dataset.csv');
-  const ext = path.extname(fileName).toLowerCase();
+  const ext = path.extname(originalName || filePath).toLowerCase();
 
-  let tableName = path.basename(fileName, ext).replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
+  let tableName = path.basename(originalName || filePath, ext).replace(/[^a-zA-Z0-9_]/g, '_').toLowerCase();
   if (!tableName || !/^[a-zA-Z_]/.test(tableName)) {
     tableName = 'dataset_' + tableName;
   }
 
-  let buffer;
-  if (Buffer.isBuffer(fileInput)) {
-    buffer = fileInput;
-  } else if (typeof fileInput === 'string') {
-    if (fs.existsSync(fileInput)) {
-      buffer = fs.readFileSync(fileInput);
-    } else {
-      buffer = Buffer.from(fileInput, 'utf8');
-    }
-  } else {
-    throw new Error('Invalid file input provided for SQLite WASM loader.');
-  }
-
   if (ext === '.csv' || ext === '.txt') {
-    const fileContent = buffer.toString('utf8');
+    const fileContent = fs.readFileSync(filePath, 'utf8');
     const parsed = Papa.parse(fileContent, { header: true, skipEmptyLines: true });
 
     if (!parsed.data || parsed.data.length === 0) {
@@ -64,7 +50,7 @@ const loadFileIntoSqlite = async (dbKey, fileInput, originalName) => {
     }
     insertStmt.free();
   } else if (ext === '.xlsx' || ext === '.xls') {
-    const workbook = XLSX.read(buffer, { type: 'buffer' });
+    const workbook = XLSX.readFile(filePath);
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
 
@@ -109,7 +95,8 @@ const loadFileIntoSqlite = async (dbKey, fileInput, originalName) => {
     }
     insertStmt.free();
   } else if (ext === '.db' || ext === '.sqlite') {
-    const loadedDb = new SqlInstance.Database(buffer);
+    const fileBuffer = fs.readFileSync(filePath);
+    const loadedDb = new SqlInstance.Database(fileBuffer);
     sqliteDatabases.set(dbKey, loadedDb);
     return loadedDb;
   }
@@ -180,18 +167,10 @@ const introspectSqlite = (dbKey) => {
 /**
  * Execute query against SQLite database with automatic reload on server restart
  */
-const executeSqliteQuery = async (dbKey, sql, dataSourceId, originalFileName) => {
+const executeSqliteQuery = async (dbKey, sql, filePath, originalFileName) => {
   let db = sqliteDatabases.get(dbKey);
-  if (!db && dataSourceId) {
-    try {
-      const { getFileUploadByDataSourceId } = require('../../config/db');
-      const fileRecord = await getFileUploadByDataSourceId(dataSourceId);
-      if (fileRecord && fileRecord.fileBuffer) {
-        db = await loadFileIntoSqlite(dbKey, fileRecord.fileBuffer, fileRecord.originalName || originalFileName);
-      }
-    } catch (e) {
-      console.warn('[SQLite Re-hydration Warning]:', e.message);
-    }
+  if (!db && filePath && fs.existsSync(filePath)) {
+    db = await loadFileIntoSqlite(dbKey, filePath, originalFileName);
   }
   if (!db) throw new Error(`SQLite database '${dbKey}' not found. Please re-upload the file or select a data source.`);
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Eye, Edit2, Trash2, ArrowLeft, AlertCircle, LayoutDashboard, CheckCircle2, Clock } from 'lucide-react';
+import { Plus, Eye, Edit2, Trash2, ArrowLeft, AlertCircle, LayoutDashboard, CheckCircle2 } from 'lucide-react';
 import { getDashboards, createDashboard, deleteDashboard, getDataSources } from '../services/api';
 
 export default function DashboardsPage({ onNavigate }) {
@@ -182,82 +182,49 @@ export default function DashboardsPage({ onNavigate }) {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {dashboards.map((dash) => {
-                    const rawDate = dash.createdAt || dash.created_at || dash.updatedAt || dash.updated_at;
-                    const formattedDateTime = rawDate 
-                      ? new Date(rawDate).toLocaleString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })
-                      : new Date().toLocaleString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        });
-
-                    return (
-                      <div
-                        key={dash.id || dash._id}
-                        className="bg-[#18181b] border border-[#2e2e36] hover:border-zinc-500 rounded-2xl p-5 shadow-lg flex flex-col justify-between space-y-4 transition"
-                      >
-                        <div className="space-y-3">
-                          {/* Title and Visibility Badge */}
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-center space-x-2 text-indigo-400 font-bold text-sm min-w-0">
-                              <LayoutDashboard className="w-4 h-4 shrink-0" />
-                              <span className="text-white text-base font-bold truncate" title={dash.name}>
-                                {dash.name}
-                              </span>
-                            </div>
-                            <span className="px-2.5 py-0.5 bg-[#222226] border border-[#33333b] text-zinc-300 text-xs font-semibold rounded-md shrink-0">
-                              {dash.visibility || 'Private'}
-                            </span>
+                  {dashboards.map((dash) => (
+                    <div
+                      key={dash.id || dash._id}
+                      className="bg-[#18181b] border border-[#2e2e36] hover:border-zinc-500 rounded-2xl p-5 shadow-lg flex flex-col justify-between space-y-4 transition"
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2.5 text-indigo-400 font-bold text-sm">
+                            <LayoutDashboard className="w-4 h-4" />
+                            <span className="text-white text-base">{dash.name}</span>
                           </div>
-
-                          {/* Creation Date and Time Badge */}
-                          <div className="flex items-center space-x-1.5 text-xs text-indigo-300 font-semibold bg-[#22222a] border border-[#333342] px-3 py-1.5 rounded-lg w-fit">
-                            <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                            <span>{formattedDateTime}</span>
-                          </div>
-
-                          {/* Description / SQL Details */}
-                          {dash.description && (
-                            <p className="text-xs text-zinc-300 leading-relaxed font-mono bg-[#121419] p-3 rounded-xl border border-[#282832] line-clamp-3">
-                              {dash.description}
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Footer Bar */}
-                        <div className="pt-3 border-t border-[#2e2e36] flex items-center justify-between">
-                          <span className="text-xs font-bold text-zinc-400 flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span>
-                            <span>{dash.widgets || 1} Widget Cell</span>
+                          <span className="px-2.5 py-0.5 bg-[#222226] border border-[#33333b] text-zinc-300 text-xs font-semibold rounded-md">
+                            {dash.visibility || 'Private'}
                           </span>
-                          <div className="flex items-center space-x-2">
-                            <button
-                              onClick={() => onNavigate?.('workspace')}
-                              className="px-3.5 py-1.5 bg-[#5850ec] hover:bg-[#4f46e5] text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-sm active:scale-[0.98]"
-                            >
-                              Open
-                            </button>
-                            <button
-                              onClick={() => handleDelete(dash.id || dash._id)}
-                              className="px-2.5 py-1.5 border border-rose-800/80 hover:bg-rose-950/40 text-rose-400 text-xs font-bold rounded-xl transition cursor-pointer"
-                              title="Delete cell"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                        </div>
+                        {dash.description && (
+                          <p className="text-xs text-zinc-400 leading-relaxed line-clamp-2">
+                            {dash.description}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="pt-3 border-t border-[#2e2e36] flex items-center justify-between">
+                        <span className="text-xs font-bold text-zinc-400">
+                          {dash.widgets || 0} Widgets
+                        </span>
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => onNavigate?.('workspace')}
+                            className="px-3 py-1.5 bg-[#5850ec] hover:bg-[#4f46e5] text-white text-xs font-bold rounded-lg transition cursor-pointer"
+                          >
+                            Open
+                          </button>
+                          <button
+                            onClick={() => handleDelete(dash.id || dash._id)}
+                            className="px-2.5 py-1.5 border border-rose-800/80 hover:bg-rose-950/40 text-rose-400 text-xs font-bold rounded-lg transition cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

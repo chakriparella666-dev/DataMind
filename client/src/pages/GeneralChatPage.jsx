@@ -164,11 +164,10 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
             className={`flex items-start space-x-4 max-w-5xl mx-auto ${msg.sender === 'user' ? 'flex-row-reverse space-x-reverse group' : ''}`}
           >
             <div
-              className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 shadow-md ${
-                msg.sender === 'user'
+              className={`w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 shadow-md ${msg.sender === 'user'
                   ? 'bg-white text-black font-black'
                   : 'bg-[#222226] border border-[#383842] text-white'
-              }`}
+                }`}
             >
               {msg.sender === 'user' ? <User className="w-5 h-5 text-black" /> : <Bot className="w-5 h-5 text-white" />}
             </div>
@@ -223,7 +222,7 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
       {/* Input Bar */}
       <footer className="p-6 border-t border-[#2e2e36] bg-[#222226]">
         <form onSubmit={handleSend} className="max-w-5xl mx-auto flex flex-col space-y-3">
-          
+
           {attachedImage && (
             <div className="flex items-center space-x-2 bg-[#18181b] px-3.5 py-2 rounded-xl border border-[#383842] w-max">
               <Image className="w-4 h-4 text-indigo-400" />
@@ -267,11 +266,10 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
               <button
                 type="button"
                 onClick={toggleVoiceInput}
-                className={`absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-lg transition cursor-pointer ${
-                  isListening
+                className={`absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-lg transition cursor-pointer ${isListening
                     ? 'bg-rose-600 text-white animate-pulse'
                     : 'text-zinc-400 hover:text-white'
-                }`}
+                  }`}
                 title="Voice Input"
               >
                 {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}

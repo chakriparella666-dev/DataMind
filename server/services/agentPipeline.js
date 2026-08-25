@@ -15,11 +15,13 @@ User Input: "${message}"
 Respond strictly with a JSON object: { "intent": "sql_question" } or { "intent": "general_chat" }`;
 
   try {
-    const raw = await generateGeminiText(prompt, 'You are an intent classifier.', 'gemini-3.5-flash-lite');
-    const match = raw.match(/\{[\s\S]*\}/);
-    if (match) {
-      const parsed = JSON.parse(match[0]);
-      return parsed.intent || 'sql_question';
+    const raw = await generateGeminiText(prompt, 'You are an intent classifier.', 'gemini-3.5-flash');
+    if (raw) {
+      const match = raw.match(/\{[\s\S]*\}/);
+      if (match) {
+        const parsed = JSON.parse(match[0]);
+        return parsed.intent || 'sql_question';
+      }
     }
   } catch (err) {
     console.warn('[Agent Pipeline] Intent classification fallback:', err.message);
@@ -28,30 +30,119 @@ Respond strictly with a JSON object: { "intent": "sql_question" } or { "intent":
 };
 
 /**
- * Generates smart responses for General AI Chatbot mode
+ * Generates smart responses for General AI Chatbot mode strictly via Gemini API key
  */
 const getSmartGeneralReply = async (message, history = []) => {
-  const historyText = history
-    .map(h => `${h.sender === 'user' ? 'User' : 'Assistant'}: ${h.text}`)
+  // Keep last 6 turns and truncate past responses to max 300 chars for sub-2-second ultra-fast execution
+  const recentHistory = (history || []).slice(-6);
+  const historyText = recentHistory
+    .map(h => `${h.sender === 'user' ? 'User' : 'Assistant'}: ${(h.text || '').slice(0, 300)}`)
     .join('\n');
 
-  const systemPrompt = `You are DataMind General AI Assistant. Help the user with SQL syntax, database normalization, query optimizations, indexes, CTEs, joins, or general software engineering questions. Keep your answers clear, helpful, and formatted in clean markdown.`;
+  const systemPrompt = `You are DataMind General AI Assistant. Help the user with SQL syntax, database normalization, query optimizations, indexes, CTEs, joins, or general software engineering questions. Keep your answers clear, helpful, concise, and formatted in clean markdown.`;
 
-  const userPrompt = `${historyText ? `Conversation History:\n${historyText}\n\n` : ''}User Question: "${message}"`;
+  const userPrompt = `${historyText ? `Recent Conversation Context:\n${historyText}\n\n` : ''}User Question: "${message}"`;
 
   try {
     const reply = await generateGeminiText(userPrompt, systemPrompt, 'gemini-3.5-flash-lite');
-    return reply || 'How can I assist you with your database or SQL queries today?';
+    if (reply && reply.trim()) {
+      return reply.trim();
+    }
+    return `⚠️ Could not generate a response from Gemini API. Please verify that your GEMINI_API_KEY in server/.env is valid and active.`;
   } catch (err) {
-    return `Error connecting to AI service: ${err.message}`;
+    if (err.message && (err.message.includes('401') || err.message.includes('Unauthorized') || err.message.includes('API_KEY'))) {
+      return `⚠️ **Gemini API Key Error**: The current \`GEMINI_API_KEY\` in \`server/.env\` is invalid or unauthorized (starts with \`AQ.Ab...\`). Please provide a valid Google AI Studio API key starting with \`AIzaSy...\` in your \`server/.env\` file.`;
+    }
+    return `⚠️ **Gemini API Error**: ${err.message}`;
   }
+};
+
+/**
+ * Dynamic Schema Entity Verification
+ * Verifies if any noun/entity specified in the user's prompt exists in the active dataset's
+ * dataset name, table names, or column names.
+ */
+const verifySchemaRelevance = (message, dataSource) => {
+  if (!dataSource || !dataSource.schemaMetadata) return { isRelevant: true };
+
+  const prompt = message.toLowerCase().trim();
+  const words = prompt.replace(/[^a-z0-9_\s]/g, '').split(/\s+/);
+  const commonStopWords = new Set([
+    'give', 'me', 'the', 'show', 'all', 'details', 'detail', 'list', 'get', 'select', 
+    'find', 'display', 'fetch', 'records', 'record', 'data', 'info', 'information', 
+    'from', 'table', 'database', 'where', 'and', 'or', 'for', 'with', 'in', 'of', 'to', 
+    'a', 'an', 'is', 'are', 'what', 'which', 'how', 'many', 'count', 'top', 'by', 'order',
+    'asc', 'desc', 'limit', 'name', 'names'
+  ]);
+
+  const entityCandidateWords = words.filter(w => w.length >= 3 && !commonStopWords.has(w));
+  if (entityCandidateWords.length === 0) {
+    return { isRelevant: true };
+  }
+
+  const datasetName = (dataSource.name || '').toLowerCase();
+  const tables = dataSource.schemaMetadata.tables || [];
+
+  const schemaTokens = new Set();
+  datasetName.replace(/[^a-z0-9_]/g, ' ').split(/\s+/).forEach(tok => {
+    if (tok.length >= 3) schemaTokens.add(tok);
+  });
+
+  for (const t of tables) {
+    const tName = (t.name || '').toLowerCase();
+    tName.replace(/[^a-z0-9_]/g, ' ').split(/\s+/).forEach(tok => {
+      if (tok.length >= 3) schemaTokens.add(tok);
+    });
+
+    for (const c of t.columns || []) {
+      const cName = (c.name || '').toLowerCase();
+      cName.replace(/[^a-z0-9_]/g, ' ').split(/\s+/).forEach(tok => {
+        if (tok.length >= 3) schemaTokens.add(tok);
+      });
+    }
+  }
+
+  let matchFound = false;
+  let unmatchedWord = '';
+
+  for (const word of entityCandidateWords) {
+    const stem = word.replace(/s$/, '');
+    let wordMatches = false;
+    for (const token of schemaTokens) {
+      if (token.includes(word) || token.includes(stem) || word.includes(token) || stem.includes(token)) {
+        wordMatches = true;
+        break;
+      }
+    }
+
+    if (wordMatches) {
+      matchFound = true;
+      break;
+    } else {
+      unmatchedWord = word;
+    }
+  }
+
+  if (!matchFound) {
+    const tableSummaryStr = tables.map(t => {
+      const cols = (t.columns || []).map(c => c.name).join(', ');
+      return `"${t.name}" [${cols}]`;
+    }).join('; ');
+
+    return {
+      isRelevant: false,
+      reason: `The question is not related to the connected database (${dataSource.name || 'Dataset'}). The requested entity/concept '${unmatchedWord}' does not exist in this dataset. Available tables and columns: ${tableSummaryStr}`
+    };
+  }
+
+  return { isRelevant: true };
 };
 
 /**
  * Main Agent Pipeline powered 100% by Google Gemini AI API
  */
 const processUserMessage = async ({ message, dataSource, history = [], mode = 'sql' }) => {
-  // 1. General Chat Mode
+  // 1. General Chat Mode - Dynamically processed via Gemini API
   if (mode === 'general') {
     const reply = await getSmartGeneralReply(message, history);
     return {
@@ -60,7 +151,7 @@ const processUserMessage = async ({ message, dataSource, history = [], mode = 's
     };
   }
 
-  // 2. Fast Greeting Check (0ms local match for simple conversational queries)
+  // 2. Greeting Check (dynamically answered via Gemini API)
   const isGreetingPattern = /^(hi|hii|hiii|hello|hey|heyy|how are you|who are you|good morning|good evening|thanks|thank you)\b/i;
   if (isGreetingPattern.test(message.trim())) {
     const reply = await getSmartGeneralReply(message, history);
@@ -79,6 +170,21 @@ const processUserMessage = async ({ message, dataSource, history = [], mode = 's
 
   const dialect = dataSource.type === 'postgres' ? 'postgres' : (dataSource.type === 'mysql' ? 'mysql' : 'sqlite');
 
+  // Dynamic Schema Entity Verification
+  const schemaVerification = verifySchemaRelevance(message, dataSource);
+  if (!schemaVerification.isRelevant) {
+    return {
+      intent: 'sql_question',
+      isRelevant: false,
+      error: schemaVerification.reason,
+      explanation: schemaVerification.reason,
+      text: schemaVerification.reason,
+      sql: null,
+      data: [],
+      fields: []
+    };
+  }
+
   // Step 1: Full Database & Excel Schema Context
   const fullSchemaText = (dataSource.schemaMetadata?.tables || []).map(t => {
     const colsStr = (t.columns || []).map(c => `"${c.name}" (${c.type})`).join(', ');
@@ -90,41 +196,48 @@ const processUserMessage = async ({ message, dataSource, history = [], mode = 's
     return `"${t.name}" [${cols}]`;
   }).join('; ');
 
-  // Step 2: Pure Gemini AI SQL Query Generation & Strict Schema Relevance Verification
-  const systemPrompt = `You are a strict database query validator and SQL generator.
+  // Step 2: Pure Gemini AI SQL Query Generation & Schema Relevance Verification
+  const systemPrompt = `You are an expert AI SQL Generator and database query assistant.
 DATABASE DIALECT: ${dialect}
-ACTIVE DATASET: "${dataSource.name || 'Connected Database'}"
+ACTIVE DATASET NAME: "${dataSource.name || 'Connected Database'}"
 
-FULL CONNECTED DATABASE SCHEMA (ALL TABLES AND ALL COLUMNS IN THIS DATASET):
+FULL CONNECTED DATABASE SCHEMA (TABLES AND COLUMNS IN THIS DATASET):
 ${fullSchemaText}
 
-STRICT RELEVANCE & NO-SUBSTITUTION RULES:
-1. NO CONCEPT SUBSTITUTION OR GUESSWORK (CRITICAL RULE):
-   - You MUST NOT guess, assume, fuzzy-map, or substitute non-existent concepts.
-   - For example: If the user asks for "customer names", "customers", "orders", "order status", or "sales", but the database contains student data (e.g. columns: placement_status, gpa, department, age):
-     DO NOT map "order status" to "placement_status"!
-     DO NOT map "customers" to "students"!
-     DO NOT map "orders" or "purchases" to any student columns!
-   - If the user's question asks for any entity, domain, or column concept that DOES NOT explicitly exist in the CONNECTED DATABASE SCHEMA above:
-     - You MUST set "isRelevant": false.
-     - Set "sql": "".
-     - Set "explanation": "The question is not related to the connected database (${dataSource.name || 'Dataset'}). The database contains table(s) and column(s): ${tableSummaryStr} and does not contain matching customer or order data."
+CRITICAL RELEVANCE RULES:
+1. ENTITY VERIFICATION:
+   - Identify the main entity or concept requested in the user's question (e.g. "student", "user", "employee", "patient", "flight", "invoice", "product", "sales", etc.).
+   - Check if that entity or concept ACTUALLY exists in the table names, dataset name, or column names in the FULL CONNECTED DATABASE SCHEMA above.
+   - If the requested entity DOES NOT exist in the connected database schema above:
+     - Set "entityExistsInSchema": false
+     - Set "isRelevant": false
+     - Set "sql": ""
+     - Set "explanation": "The question is not related to the connected database (${dataSource.name || 'Dataset'}). The requested entity does not exist in this dataset. Available tables and columns: ${tableSummaryStr}"
+   - NEVER query an unrelated table. NEVER write "as a proxy for...". DO NOT combine names like "user (student)" or "student/user".
 
-2. SQL GENERATION (ONLY IF ALL REQUESTED CONCEPTS EXPLICITLY MATCH THE SCHEMA):
+2. IF THE QUESTION ASKS FOR TABLES OR COLUMNS IN THE DATABASE:
+   - E.g., "show tables", "what columns exist", "give me table names and column names"
+   - Set "entityExistsInSchema": true
    - Set "isRelevant": true
-   - Generate a single, valid, read-only SELECT statement in ${dialect} dialect based strictly on the user's request.
-   - Use exact table names and column names from the schema provided above.
-   - FORMATTING RULE: Format the SQL query line-by-line cleanly with major keywords (SELECT, FROM, WHERE, GROUP BY, ORDER BY, LIMIT) starting on separate lines.
-   - Provide a concise explanation of what the query retrieves.
+   - If PostgreSQL dialect, generate: SELECT table_name, column_name, data_type FROM information_schema.columns WHERE table_schema = 'public' ORDER BY table_name, ordinal_position;
+   - If SQLite dialect, generate: SELECT name FROM sqlite_master WHERE type='table';
+   - Set "explanation": "Retrieves the list of all tables and columns from the database schema."
 
-3. DYNAMIC EVALUATION ONLY:
-   Evaluate everything dynamically using Gemini API.
+3. IF THE QUESTION MATCHES TABLES/COLUMNS IN THE SCHEMA:
+   - Set "entityExistsInSchema": true
+   - Set "isRelevant": true
+   - Generate a valid read-only SELECT query in ${dialect} matching the user's question using ONLY existing table names and column names.
+   - SELECT all relevant columns (or all columns if general details requested).
+   - Format major SQL keywords (SELECT, FROM, WHERE, GROUP BY, ORDER BY, LIMIT) on new lines cleanly.
+   - Write a simple explanation describing ONLY what table and columns are being retrieved.
 
-4. STRICT JSON FORMAT (Return ONLY valid JSON, no extra text):
+STRICT JSON OUTPUT FORMAT (Respond ONLY with valid JSON):
 {
-  "isRelevant": true | false,
-  "sql": "SELECT ... \\nFROM ... \\nWHERE ... \\nLIMIT 100;",
-  "explanation": "<explanation of query OR reason why question is not related to the database>"
+  "entityRequested": "<core entity asked by user, e.g. student>",
+  "entityExistsInSchema": true or false,
+  "isRelevant": true or false,
+  "sql": "SELECT col1, col2\\nFROM table_name\\nLIMIT 100;",
+  "explanation": "Retrieves details from the database."
 }`;
 
   let sqlGenRes = await generateGeminiText(`User Question: "${message}"`, systemPrompt, 'gemini-3.5-flash-lite');
@@ -138,10 +251,10 @@ STRICT RELEVANCE & NO-SUBSTITUTION RULES:
       const jsonMatch = sqlGenRes.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
-        if (parsed.isRelevant === false) {
+        if (parsed.entityExistsInSchema === false || parsed.isRelevant === false) {
           isRelevant = false;
         }
-        generatedSql = parsed.sql || '';
+        generatedSql = isRelevant ? (parsed.sql || '') : '';
         explanation = parsed.explanation || '';
       }
     } catch (e) {
@@ -151,7 +264,7 @@ STRICT RELEVANCE & NO-SUBSTITUTION RULES:
 
   // Handle irrelevant questions or missing SQL
   if (!isRelevant || !generatedSql) {
-    const notRelatedMsg = explanation || `The question is not related to the connected database (${dataSource.name || 'Dataset'}).`;
+    const notRelatedMsg = explanation || `The question is not related to the connected database (${dataSource.name || 'Dataset'}). Available tables: ${tableSummaryStr}`;
     return {
       intent: 'sql_question',
       isRelevant: false,

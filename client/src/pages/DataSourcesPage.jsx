@@ -6,7 +6,7 @@ export default function DataSourcesPage({ activeDataSource, onConnectSuccess, on
   const [dataSources, setDataSources] = useState([]);
   const [isAdding, setIsAdding] = useState(false);
   const [activeTab, setActiveTab] = useState('connect'); // 'connect' | 'upload'
-  
+
   const [pgForm, setPgForm] = useState({
     name: '',
     type: 'postgres',
@@ -46,6 +46,52 @@ export default function DataSourcesPage({ activeDataSource, onConnectSuccess, on
     setPgForm({ ...pgForm, [e.target.name]: e.target.value });
   };
 
+  const getDbPlaceholders = (type) => {
+    switch (type) {
+      case 'mysql':
+        return {
+          name: 'e.g. Local MySQL Database',
+          host: 'localhost',
+          port: '3306',
+          database: 'mysql / sys',
+          schema: 'N/A (MySQL default)',
+          user: 'root',
+          password: 'Enter MySQL root password'
+        };
+      case 'sqlserver':
+        return {
+          name: 'e.g. Enterprise SQL Server Database',
+          host: 'localhost',
+          port: '1433',
+          database: 'master',
+          schema: 'dbo',
+          user: 'sa',
+          password: 'Enter SQL Server SA password'
+        };
+      case 'sqlite':
+        return {
+          name: 'e.g. Local SQLite Database',
+          host: 'localhost',
+          port: '0',
+          database: 'local_database.sqlite',
+          schema: 'main',
+          user: 'admin',
+          password: 'N/A (No password required)'
+        };
+      case 'postgres':
+      default:
+        return {
+          name: 'e.g. Local PostgreSQL Database',
+          host: 'localhost',
+          port: '5432',
+          database: 'datamind_app / postgres',
+          schema: 'public',
+          user: 'postgres',
+          password: 'Enter PostgreSQL password'
+        };
+    }
+  };
+
   const handlePgSubmit = async (e) => {
     e.preventDefault();
     setError(null);
@@ -56,20 +102,20 @@ export default function DataSourcesPage({ activeDataSource, onConnectSuccess, on
       return;
     }
 
-    // Clean host by stripping port suffixes (e.g. localhost:3000 -> localhost)
-    const rawHost = (pgForm.host || 'localhost').trim();
+    const ph = getDbPlaceholders(pgForm.type);
+    const rawHost = (pgForm.host || ph.host).trim();
     const cleanHost = rawHost.split(':')[0] || 'localhost';
 
     setLoading(true);
     try {
       const res = await connectPostgres({
-        name: pgForm.name || pgForm.database || 'Database Connection',
+        name: pgForm.name || pgForm.database || ph.name,
         type: pgForm.type,
         host: cleanHost,
-        port: Number(pgForm.port) || (pgForm.type === 'mysql' ? 3306 : 5432),
-        database: pgForm.database || 'postgres',
-        schema: pgForm.schema || 'public',
-        user: pgForm.user || 'postgres',
+        port: Number(pgForm.port) || Number(ph.port) || 5432,
+        database: pgForm.database || (pgForm.type === 'mysql' ? 'mysql' : 'datamind_app'),
+        schema: pgForm.schema || (pgForm.type === 'sqlserver' ? 'dbo' : 'public'),
+        user: pgForm.user || ph.user,
         password: pgForm.password
       });
 
@@ -88,6 +134,8 @@ export default function DataSourcesPage({ activeDataSource, onConnectSuccess, on
       setLoading(false);
     }
   };
+
+  const currentPh = getDbPlaceholders(pgForm.type);
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
@@ -134,13 +182,7 @@ export default function DataSourcesPage({ activeDataSource, onConnectSuccess, on
     try {
       const res = await deleteDataSource(id);
       if (res.success) {
-        const remaining = dataSources.filter(ds => String(ds.id || ds._id) !== String(id));
-        setDataSources(remaining);
-
-        if (activeDataSource && String(activeDataSource.id || activeDataSource._id) === String(id)) {
-          const nextActive = remaining.length > 0 ? remaining[0] : null;
-          if (onSelectDataSource) onSelectDataSource(nextActive);
-        }
+        setDataSources(prev => prev.filter(ds => String(ds.id || ds._id) !== String(id)));
       }
     } catch (err) {
       alert('Error deleting data source');
@@ -150,7 +192,7 @@ export default function DataSourcesPage({ activeDataSource, onConnectSuccess, on
   return (
     <div className="flex-1 h-screen bg-[#18181b] text-slate-100 overflow-y-auto p-6 md:p-8 font-sans antialiased">
       <div className="max-w-6xl w-full mx-auto space-y-6">
-        
+
         {error && (
           <div className="p-4 bg-rose-950/60 border border-rose-800/80 rounded-xl text-rose-300 text-sm flex items-center gap-2.5 font-medium shadow-lg">
             <AlertCircle className="w-5 h-5 shrink-0 text-rose-400" />
@@ -283,11 +325,10 @@ export default function DataSourcesPage({ activeDataSource, onConnectSuccess, on
                 <div className="flex items-center space-x-2 bg-[#18181b] p-1.5 rounded-xl border border-[#33333b]">
                   <button
                     onClick={() => { setActiveTab('connect'); setError(null); setSuccessMsg(null); }}
-                    className={`px-4 py-2.5 rounded-lg text-xs md:text-sm font-bold transition flex items-center space-x-2 cursor-pointer ${
-                      activeTab === 'connect'
+                    className={`px-4 py-2.5 rounded-lg text-xs md:text-sm font-bold transition flex items-center space-x-2 cursor-pointer ${activeTab === 'connect'
                         ? 'bg-[#5850ec] text-white shadow-sm'
                         : 'text-zinc-400 hover:text-white'
-                    }`}
+                      }`}
                   >
                     <Database className="w-4 h-4" />
                     <span>Add SQL Database</span>
@@ -295,11 +336,10 @@ export default function DataSourcesPage({ activeDataSource, onConnectSuccess, on
 
                   <button
                     onClick={() => { setActiveTab('upload'); setError(null); setSuccessMsg(null); }}
-                    className={`px-4 py-2.5 rounded-lg text-xs md:text-sm font-bold transition flex items-center space-x-2 cursor-pointer ${
-                      activeTab === 'upload'
+                    className={`px-4 py-2.5 rounded-lg text-xs md:text-sm font-bold transition flex items-center space-x-2 cursor-pointer ${activeTab === 'upload'
                         ? 'bg-[#5850ec] text-white shadow-sm'
                         : 'text-zinc-400 hover:text-white'
-                    }`}
+                      }`}
                   >
                     <FileSpreadsheet className="w-4 h-4" />
                     <span>Upload File (CSV/Excel)</span>
@@ -332,7 +372,7 @@ export default function DataSourcesPage({ activeDataSource, onConnectSuccess, on
                       autoComplete="off"
                       value={pgForm.name}
                       onChange={handlePgChange}
-                      placeholder="e.g. Local PostgreSQL Database"
+                      placeholder={currentPh.name}
                       className="w-full bg-[#18181b] border border-[#383842] focus:border-white focus:outline-none rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-500 transition"
                     />
                   </div>
@@ -367,7 +407,7 @@ export default function DataSourcesPage({ activeDataSource, onConnectSuccess, on
                           autoComplete="off"
                           value={pgForm.host}
                           onChange={handlePgChange}
-                          placeholder="e.g. localhost"
+                          placeholder={currentPh.host}
                           className="w-full bg-[#18181b] border border-[#383842] focus:border-white focus:outline-none rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-500 transition"
                         />
                       </div>
@@ -382,7 +422,7 @@ export default function DataSourcesPage({ activeDataSource, onConnectSuccess, on
                           autoComplete="off"
                           value={pgForm.port}
                           onChange={handlePgChange}
-                          placeholder="e.g. 5432"
+                          placeholder={currentPh.port}
                           className="w-full bg-[#18181b] border border-[#383842] focus:border-white focus:outline-none rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-500 transition"
                         />
                       </div>
@@ -395,7 +435,7 @@ export default function DataSourcesPage({ activeDataSource, onConnectSuccess, on
                           autoComplete="off"
                           value={pgForm.database}
                           onChange={handlePgChange}
-                          placeholder="e.g. my_database_name"
+                          placeholder={currentPh.database}
                           className="w-full bg-[#18181b] border border-[#383842] focus:border-white focus:outline-none rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-500 transition"
                         />
                       </div>
@@ -409,7 +449,7 @@ export default function DataSourcesPage({ activeDataSource, onConnectSuccess, on
                         autoComplete="off"
                         value={pgForm.schema}
                         onChange={handlePgChange}
-                        placeholder="e.g. public"
+                        placeholder={currentPh.schema}
                         className="w-full bg-[#18181b] border border-[#383842] focus:border-white focus:outline-none rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-500 transition"
                       />
                     </div>
@@ -429,7 +469,7 @@ export default function DataSourcesPage({ activeDataSource, onConnectSuccess, on
                           autoComplete="off"
                           value={pgForm.user}
                           onChange={handlePgChange}
-                          placeholder="e.g. postgres"
+                          placeholder={currentPh.user}
                           className="w-full bg-[#18181b] border border-[#383842] focus:border-white focus:outline-none rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-500 transition"
                         />
                       </div>
@@ -442,7 +482,7 @@ export default function DataSourcesPage({ activeDataSource, onConnectSuccess, on
                           autoComplete="new-password"
                           value={pgForm.password}
                           onChange={handlePgChange}
-                          placeholder="Enter database password"
+                          placeholder={currentPh.password}
                           className="w-full bg-[#18181b] border border-[#383842] focus:border-white focus:outline-none rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-500 transition"
                         />
                       </div>

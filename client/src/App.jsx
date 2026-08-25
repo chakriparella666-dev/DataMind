@@ -7,20 +7,7 @@ import DatabaseWorkspace from './pages/DatabaseWorkspace';
 import GeneralChatPage from './pages/GeneralChatPage';
 import DashboardsPage from './pages/DashboardsPage';
 import DataSourcesPage from './pages/DataSourcesPage';
-import { getMe, getDataSources, getChatSessions } from './services/api';
-
-const DEFAULT_WELCOME_MESSAGE = [
-  {
-    id: 'welcome',
-    sender: 'agent',
-    text: 'Hello! How can I help you with your database or software engineering questions today? Whether you need help writing a complex SQL query, designing a normalized database schema, optimizing performance, or anything else, just let me know!'
-  }
-];
-
-const getUserStorageKey = (user, keyName) => {
-  const userIdentifier = user ? (user.id || user._id || user.email) : (localStorage.getItem('datamind_guest_id') || 'guest');
-  return `datamind_${userIdentifier}_${keyName}`;
-};
+import { getMe, getDataSources } from './services/api';
 
 export default function App() {
   const [activeSection, setActiveSection] = useState('landing');
@@ -34,11 +21,46 @@ export default function App() {
   const [workspaceActiveQuery, setWorkspaceActiveQuery] = useState(null);
   const [workspaceRecentQueries, setWorkspaceRecentQueries] = useState([]);
 
-  // Recent chat sessions strictly scoped per user
-  const [recentSessions, setRecentSessions] = useState([]);
+  // Recent chat sessions
+  const [recentSessions, setRecentSessions] = useState(() => {
+    try {
+      const saved = localStorage.getItem('datamind_recent_sessions');
+      return saved ? JSON.parse(saved) : [
+        { id: 's1', title: 'Top 5 Students by Age', time: '10m ago' },
+        { id: 's2', title: 'Average GPA Analysis', time: '1h ago' }
+      ];
+    } catch (e) {
+      return [];
+    }
+  });
 
-  // General Chat Persisted State strictly scoped per user
-  const [generalChatMessages, setGeneralChatMessages] = useState(DEFAULT_WELCOME_MESSAGE);
+  // General Chat Persisted State across tab navigation
+  const [generalChatMessages, setGeneralChatMessages] = useState(() => {
+    try {
+      const saved = localStorage.getItem('datamind_general_chat_messages');
+      return saved ? JSON.parse(saved) : [
+        {
+          id: 'welcome',
+          sender: 'agent',
+          text: 'Hello! I am your General AI Assistant. Ask me SQL questions, database design advice, how to write complex joins/CTEs, or general programming help!'
+        }
+      ];
+    } catch (e) {
+      return [
+        {
+          id: 'welcome',
+          sender: 'agent',
+          text: 'Hello! I am your General AI Assistant. Ask me SQL questions, database design advice, how to write complex joins/CTEs, or general programming help!'
+        }
+      ];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('datamind_general_chat_messages', JSON.stringify(generalChatMessages));
+    } catch (e) { }
+  }, [generalChatMessages]);
 
   // Theme Initialization on mount
   useEffect(() => {
@@ -50,30 +72,14 @@ export default function App() {
     }
   }, []);
 
-  // Verify Auth & restore cached user on mount
+  // Verify Auth on mount
   useEffect(() => {
     const token = localStorage.getItem('datamind_token');
-    const cachedUserStr = localStorage.getItem('datamind_user');
-    
-    if (cachedUserStr) {
-      try {
-        const cachedUser = JSON.parse(cachedUserStr);
-        if (cachedUser && (cachedUser.name || cachedUser.email)) {
-          setCurrentUser(cachedUser);
-          const savedSec = localStorage.getItem('datamind_active_section');
-          setActiveSection((savedSec && savedSec !== 'landing') ? savedSec : 'home');
-        }
-      } catch (e) {}
-    }
-
     if (token) {
       getMe()
         .then(res => {
-          if (res.success && res.user) {
+          if (res.success) {
             setCurrentUser(res.user);
-            localStorage.setItem('datamind_user', JSON.stringify(res.user));
-            const savedSec = localStorage.getItem('datamind_active_section');
-            setActiveSection((savedSec && savedSec !== 'landing') ? savedSec : 'home');
           }
         })
         .catch(err => {
@@ -82,98 +88,65 @@ export default function App() {
     }
   }, []);
 
-  // Sync / Load User-Scoped States (Chat Messages, Recent Sessions, Data Sources) on currentUser change
+  // Helper for per-user localStorage keys
+  const getUserKey = (keyName) => {
+    const uid = currentUser ? (currentUser.id || currentUser.email || 'user') : 'guest';
+    return `datamind_${keyName}_${uid}`;
+  };
+
+  // Helper to update & persist active dataset per user permanently
+  const handleSelectActiveDataSource = (ds) => {
+    if (!ds) return;
+    setActiveDataSource(ds);
+    try {
+      const idStr = String(ds.id || ds._id || '');
+      const dsName = ds.name || '';
+      const dsKey = getUserKey('active_ds_id');
+      const nameKey = getUserKey('active_ds_name');
+      if (idStr) localStorage.setItem(dsKey, idStr);
+      if (dsName) localStorage.setItem(nameKey, dsName);
+      localStorage.setItem('datamind_global_active_ds_name', dsName);
+    } catch (e) { }
+  };
+
+  // Fetch Data Sources strictly scoped per user and preserve user selected database
   useEffect(() => {
-    // 1. Load General Chat Messages for current user
-    const chatKey = getUserStorageKey(currentUser, 'general_chat_messages');
-    try {
-      const savedChat = localStorage.getItem(chatKey);
-      setGeneralChatMessages(savedChat ? JSON.parse(savedChat) : DEFAULT_WELCOME_MESSAGE);
-    } catch (e) {
-      setGeneralChatMessages(DEFAULT_WELCOME_MESSAGE);
-    }
-
-    // 2. Load Recent Sessions for current user
-    const sessionsKey = getUserStorageKey(currentUser, 'recent_sessions');
-    try {
-      const savedSessions = localStorage.getItem(sessionsKey);
-      setRecentSessions(savedSessions ? JSON.parse(savedSessions) : []);
-    } catch (e) {
-      setRecentSessions([]);
-    }
-
-    // 3. Reset Workspace Transient Query State on account switch
-    setWorkspaceQuestion('');
-    setWorkspaceActiveQuery(null);
-
-    // 4. Fetch Data Sources strictly scoped for current user
     getDataSources()
       .then(res => {
-        if (res.success && Array.isArray(res.dataSources)) {
+        if (res.success && Array.isArray(res.dataSources) && res.dataSources.length > 0) {
           setDataSources(res.dataSources);
-          
-          const savedActiveId = localStorage.getItem(getUserStorageKey(currentUser, 'active_datasource_id'));
+          const savedDsId = localStorage.getItem(getUserKey('active_ds_id'));
+          const savedDsName = localStorage.getItem(getUserKey('active_ds_name')) || localStorage.getItem('datamind_global_active_ds_name');
 
           setActiveDataSource(prev => {
+            // 1. Match by saved dataset ID for this user
+            if (savedDsId) {
+              const matchSavedId = res.dataSources.find(ds => String(ds.id || ds._id || '') === String(savedDsId));
+              if (matchSavedId) return matchSavedId;
+            }
+            // 2. Match by saved dataset Name across logins (e.g. "student_database_100_records.xlsx")
+            if (savedDsName) {
+              const matchSavedName = res.dataSources.find(ds => ds.name === savedDsName);
+              if (matchSavedName) return matchSavedName;
+            }
+            // 3. Keep current active dataset in memory if valid
             if (prev) {
-              const match = res.dataSources.find(ds => String(ds._id || ds.id) === String(prev._id || prev.id));
-              if (match) return match;
+              const prevId = String(prev.id || prev._id || '');
+              const matchPrev = res.dataSources.find(ds => String(ds.id || ds._id || '') === prevId);
+              if (matchPrev) return matchPrev;
             }
-            if (savedActiveId) {
-              const match = res.dataSources.find(ds => String(ds._id || ds.id) === String(savedActiveId));
-              if (match) return match;
-            }
-            return res.dataSources.length > 0 ? res.dataSources[0] : null;
+            // 4. Default to first available data source
+            return res.dataSources[0];
           });
-        } else {
+        } else if (res.success && Array.isArray(res.dataSources) && res.dataSources.length === 0) {
           setDataSources([]);
           setActiveDataSource(null);
         }
       })
       .catch(err => {
         console.warn('DataSources fetch warning:', err.message);
-        setDataSources([]);
-        setActiveDataSource(null);
       });
-
-    // 5. Fetch Backend Chat Sessions for current user
-    getChatSessions()
-      .then(res => {
-        if (res.success && Array.isArray(res.sessions) && res.sessions.length > 0) {
-          const formatted = res.sessions.map(s => ({
-            id: s.id || s._id || s.sessionId,
-            title: s.title || 'Chat Session',
-            time: 'Recent'
-          }));
-          setRecentSessions(formatted);
-          try {
-            localStorage.setItem(getUserStorageKey(currentUser, 'recent_sessions'), JSON.stringify(formatted));
-          } catch (e) {}
-        }
-      })
-      .catch(err => {
-        console.warn('Chat sessions fetch warning:', err.message);
-      });
-
   }, [currentUser]);
-
-  // Persist General Chat Messages under user-scoped key whenever updated
-  useEffect(() => {
-    const chatKey = getUserStorageKey(currentUser, 'general_chat_messages');
-    try {
-      localStorage.setItem(chatKey, JSON.stringify(generalChatMessages));
-    } catch (e) {}
-  }, [generalChatMessages, currentUser]);
-
-  const handleSelectDataSource = (ds) => {
-    setActiveDataSource(ds);
-    const key = getUserStorageKey(currentUser, 'active_datasource_id');
-    if (ds && (ds._id || ds.id)) {
-      localStorage.setItem(key, String(ds._id || ds.id));
-    } else {
-      localStorage.removeItem(key);
-    }
-  };
 
   const handleAddSession = (question) => {
     const newSession = {
@@ -184,9 +157,8 @@ export default function App() {
     setRecentSessions(prev => {
       const updated = [newSession, ...prev.slice(0, 9)];
       try {
-        const sessionsKey = getUserStorageKey(currentUser, 'recent_sessions');
-        localStorage.setItem(sessionsKey, JSON.stringify(updated));
-      } catch (e) {}
+        localStorage.setItem('datamind_recent_sessions', JSON.stringify(updated));
+      } catch (e) { }
       return updated;
     });
   };
@@ -195,40 +167,26 @@ export default function App() {
     setRecentSessions(prev => {
       const updated = prev.filter(s => s.id !== id);
       try {
-        const sessionsKey = getUserStorageKey(currentUser, 'recent_sessions');
-        localStorage.setItem(sessionsKey, JSON.stringify(updated));
-      } catch (e) {}
+        localStorage.setItem('datamind_recent_sessions', JSON.stringify(updated));
+      } catch (e) { }
       return updated;
     });
-  };
-
-  const handleSectionChange = (sec) => {
-    setActiveSection(sec);
-    if (sec) {
-      try {
-        localStorage.setItem('datamind_active_section', sec);
-      } catch (e) {}
-    }
   };
 
   const handleNewChat = () => {
     setWorkspaceQuestion('');
     setWorkspaceActiveQuery(null);
-    handleSectionChange('workspace');
+    setActiveSection('workspace');
   };
 
   const handleLogout = () => {
     localStorage.removeItem('datamind_token');
-    localStorage.removeItem('datamind_user');
-    localStorage.removeItem('datamind_active_section');
     setCurrentUser(null);
     setDataSources([]);
     setActiveDataSource(null);
     setWorkspaceQuestion('');
     setWorkspaceActiveQuery(null);
     setWorkspaceRecentQueries([]);
-    setGeneralChatMessages(DEFAULT_WELCOME_MESSAGE);
-    setRecentSessions([]);
     setActiveSection('landing');
     setIsAuthOpen(true);
   };
@@ -238,7 +196,7 @@ export default function App() {
     if (qText) {
       setWorkspaceQuestion(qText);
     }
-    handleSectionChange('workspace');
+    setActiveSection('workspace');
   };
 
   return (
@@ -247,7 +205,7 @@ export default function App() {
       {activeSection !== 'landing' && (
         <Sidebar
           activeSection={activeSection}
-          setActiveSection={handleSectionChange}
+          setActiveSection={setActiveSection}
           activeDataSource={activeDataSource}
           recentSessions={recentSessions}
           onDeleteSession={handleDeleteSession}
@@ -262,21 +220,21 @@ export default function App() {
       <main className="flex-1 h-screen overflow-hidden flex flex-col">
         {activeSection === 'landing' && (
           <LandingPage
-            onLaunchWorkspace={() => handleSectionChange('workspace')}
+            onLaunchWorkspace={() => setActiveSection('workspace')}
             onOpenAuth={() => setIsAuthOpen(true)}
           />
         )}
         {activeSection === 'home' && (
           <HomePage
             activeDataSource={activeDataSource}
-            onNavigate={(sec) => handleSectionChange(sec)}
+            onNavigate={(sec) => setActiveSection(sec)}
             onSelectQuery={handleSelectQuery}
           />
         )}
         {activeSection === 'workspace' && (
           <DatabaseWorkspace
             activeDataSource={activeDataSource}
-            setActiveDataSource={handleSelectDataSource}
+            setActiveDataSource={handleSelectActiveDataSource}
             dataSources={dataSources}
             onAddSession={handleAddSession}
             question={workspaceQuestion}
@@ -296,7 +254,7 @@ export default function App() {
         )}
         {activeSection === 'dashboards' && (
           <DashboardsPage
-            onNavigate={(sec) => handleSectionChange(sec)}
+            onNavigate={(sec) => setActiveSection(typeof sec === 'string' ? sec : 'workspace')}
           />
         )}
         {activeSection === 'datasources' && (
@@ -304,10 +262,10 @@ export default function App() {
             activeDataSource={activeDataSource}
             onConnectSuccess={(ds) => {
               setDataSources(prev => [ds, ...(prev || [])]);
-              handleSelectDataSource(ds);
+              handleSelectActiveDataSource(ds);
             }}
             onSelectDataSource={(ds) => {
-              handleSelectDataSource(ds);
+              handleSelectActiveDataSource(ds);
             }}
           />
         )}
@@ -319,7 +277,7 @@ export default function App() {
         onClose={() => setIsAuthOpen(false)}
         onAuthSuccess={(user) => {
           setCurrentUser(user);
-          handleSectionChange('home');
+          setActiveSection('workspace');
         }}
       />
     </div>

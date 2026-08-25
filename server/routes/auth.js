@@ -1,9 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
+const { OAuth2Client } = require('google-auth-library');
 const User = require('../models/User');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'datamind_jwt_secret_key_2026';
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '274171578355-21jalpdk5koqa2q40ush34p2r4oq25ck.apps.googleusercontent.com';
+const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 /**
  * Middleware to verify JWT token
@@ -112,9 +115,22 @@ router.post('/google', async (req, res) => {
     let userGoogleId = googleId;
     let userAvatar = avatar;
 
-    // Decode Google JWT Credential if provided from Google One Tap / GSI
+    // Verify Google ID Token / Credential if provided from Google Sign-In
     if (credential) {
       try {
+        const ticket = await googleClient.verifyIdToken({
+          idToken: credential,
+          audience: GOOGLE_CLIENT_ID,
+        });
+        const payload = ticket.getPayload();
+        if (payload) {
+          userEmail = payload.email;
+          userName = payload.name || payload.given_name;
+          userGoogleId = payload.sub;
+          userAvatar = payload.picture;
+        }
+      } catch (e) {
+        console.warn('[Google Token Verification Warning]: Fallback decoding -', e.message);
         const decoded = jwt.decode(credential);
         if (decoded) {
           userEmail = decoded.email;
@@ -122,8 +138,6 @@ router.post('/google', async (req, res) => {
           userGoogleId = decoded.sub;
           userAvatar = decoded.picture;
         }
-      } catch (e) {
-        console.warn('[Google JWT Decode Warning]:', e.message);
       }
     }
 
@@ -167,15 +181,7 @@ router.get('/me', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
     if (!user) {
-      // Fallback to JWT payload user info if record is not found
-      return res.json({
-        success: true,
-        user: {
-          id: req.user.id,
-          name: req.user.name || (req.user.email ? req.user.email.split('@')[0] : 'Authenticated User'),
-          email: req.user.email || ''
-        }
-      });
+      return res.status(404).json({ success: false, error: 'User not found.' });
     }
 
     res.json({
@@ -188,16 +194,6 @@ router.get('/me', authMiddleware, async (req, res) => {
       }
     });
   } catch (error) {
-    if (req.user && (req.user.name || req.user.email)) {
-      return res.json({
-        success: true,
-        user: {
-          id: req.user.id,
-          name: req.user.name || (req.user.email ? req.user.email.split('@')[0] : 'Authenticated User'),
-          email: req.user.email || ''
-        }
-      });
-    }
     res.status(500).json({ success: false, error: error.message });
   }
 });

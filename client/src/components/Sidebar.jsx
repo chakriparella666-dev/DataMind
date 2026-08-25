@@ -5,7 +5,6 @@ import {
   FileSpreadsheet, Server, ChevronsUpDown
 } from 'lucide-react';
 import SettingsModal from './SettingsModal';
-import Logo from './Logo';
 
 export default function Sidebar({
   activeSection,
@@ -42,7 +41,15 @@ export default function Sidebar({
 
         {/* Top Brand Header */}
         <div className="p-5 border-b border-slate-800/80 flex items-center justify-between">
-          <Logo onClick={() => setActiveSection('home')} iconSize="w-9 h-9" textSize="text-xl font-extrabold text-white tracking-tight" />
+          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setActiveSection('home')}>
+            <div className="w-9 h-9 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-white font-black text-lg shadow-md">
+              D
+            </div>
+            <div>
+              <h1 className="text-xl font-black text-white tracking-tight leading-none">DataMind</h1>
+              <span className="text-xs font-bold text-zinc-400 uppercase tracking-widest">AI Platform</span>
+            </div>
+          </div>
         </div>
 
         {/* New Chat Button */}

@@ -10,6 +10,7 @@ const { introspectPostgres } = require('../db/connectors/postgres');
 const { loadFileIntoSqlite, introspectSqlite } = require('../db/connectors/sqlite');
 const { introspectMysql } = require('../db/connectors/mysql');
 const { getEmbedding } = require('../services/ragRetrieval');
+const { importFileToPostgres } = require('../utils/pgFileImporter');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'datamind_jwt_secret_key_2026';
 
@@ -30,7 +31,19 @@ const getUserIdFromReq = (req) => {
   return req.headers['x-user-id'] || req.headers['x-user-email'] || 'anonymous_guest';
 };
 
-const storage = multer.memoryStorage();
+const uploadDir = path.join(__dirname, '../uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadDir),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const safeBase = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_]/g, '_');
+    cb(null, `${Date.now()}_${safeBase}${ext}`);
+  }
+});
 
 const upload = multer({
   storage,
@@ -65,28 +78,39 @@ const generateSchemaTrainingChunks = async (dataSourceId, schemaMetadata, userId
  */
 router.post('/connect-postgres', async (req, res) => {
   try {
-    const { name, connectionString, host, port, database, user, password, schema } = req.body;
+    const { name, type = 'postgres', connectionString, host, port, database, user, password, schema } = req.body;
     const userId = getUserIdFromReq(req);
     
     // Sanitize host: strip any port suffix if user typed localhost:3000 -> localhost
     const rawHost = (typeof host === 'string' ? host : 'localhost').trim();
     const cleanHost = rawHost.split(':')[0] || 'localhost';
-    const dbPort = Number(port) || 5432;
+    
+    const defaultPort = type === 'mysql' ? 3306 : (type === 'sqlserver' ? 1433 : 5432);
+    const defaultDb = type === 'mysql' ? 'mysql' : (type === 'sqlserver' ? 'master' : 'datamind_app');
+    const defaultUser = type === 'mysql' ? 'root' : (type === 'sqlserver' ? 'sa' : 'postgres');
+
+    const dbPort = Number(port) || defaultPort;
 
     const config = connectionString || {
       host: cleanHost,
       port: dbPort,
-      database: database || 'datamind_app',
-      user: user || 'postgres',
+      database: database || defaultDb,
+      user: user || defaultUser,
       password: password || '',
       schema: schema || 'public'
     };
 
-    const schemaMetadata = await introspectPostgres(config);
+    let schemaMetadata = null;
+
+    if (type === 'mysql') {
+      schemaMetadata = await introspectMysql(config);
+    } else {
+      schemaMetadata = await introspectPostgres(config);
+    }
 
     const dataSource = await DataSource.create({
-      name: name || database || 'PostgreSQL DB',
-      type: 'postgres',
+      name: name || database || `${type.toUpperCase()} DB`,
+      type: type || 'postgres',
       connectionConfig: typeof config === 'string' ? { connectionString: config } : config,
       schemaMetadata,
       userId
@@ -99,45 +123,40 @@ router.post('/connect-postgres', async (req, res) => {
       dataSource
     });
   } catch (error) {
-    console.error('[Postgres Connect Error]:', error.message);
+    console.error(`[${req.body.type || 'Database'} Connect Error]:`, error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 /**
  * POST /api/datasources/upload-file
- * Upload CSV, Excel, or SQLite file
+ * Upload CSV, Excel, or data file directly into PostgreSQL datamind_app database
  */
 router.post('/upload-file', upload.single('file'), async (req, res) => {
   try {
-    if (!req.file || !req.file.buffer) {
+    if (!req.file) {
       return res.status(400).json({ success: false, error: 'No file uploaded.' });
     }
 
-    const { originalname, buffer, mimetype } = req.file;
+    const { originalname, path: filePath } = req.file;
     const userId = getUserIdFromReq(req);
-    const dbKey = 'db_' + Date.now();
-
-    await loadFileIntoSqlite(dbKey, buffer, originalname);
-    const schemaMetadata = introspectSqlite(dbKey);
-
     const ext = path.extname(originalname).toLowerCase();
-    const type = ext === '.csv' ? 'csv' : (ext === '.xlsx' || ext === '.xls' ? 'excel' : 'sqlite');
+    const type = ext === '.csv' ? 'csv' : (ext === '.xlsx' || ext === '.xls' ? 'excel' : 'postgres');
+
+    const imported = await importFileToPostgres(filePath, originalname);
+    const schemaMetadata = { tables: imported.tables };
 
     const dataSource = await DataSource.create({
       name: originalname,
       type,
       connectionConfig: {
         originalFileName: originalname,
-        dbKey
+        createdTables: imported.createdTables,
+        isPgTable: true
       },
       schemaMetadata,
       userId
     });
-
-    // Save binary file into PostgreSQL BYTEA column
-    const { saveFileUpload } = require('../config/db');
-    await saveFileUpload(dataSource._id, originalname, mimetype, buffer);
 
     await generateSchemaTrainingChunks(dataSource._id.toString(), schemaMetadata, userId);
 
@@ -147,74 +166,6 @@ router.post('/upload-file', upload.single('file'), async (req, res) => {
     });
   } catch (error) {
     console.error('[File Upload Error]:', error.message);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-/**
- * POST /api/datasources/sample-data
- * Create instant sample dataset with sample customers, orders, and sales tables
- */
-router.post('/sample-data', async (req, res) => {
-  try {
-    const userId = getUserIdFromReq(req);
-    const dbKey = 'sample_db_' + Date.now();
-    const SqlInstance = await require('sql.js')();
-    const db = new SqlInstance.Database();
-
-    // Create Customers Table
-    db.run(`
-      CREATE TABLE customers (
-        id INTEGER PRIMARY KEY,
-        name TEXT,
-        city text,
-        country TEXT,
-        spent REAL
-      );
-      INSERT INTO customers VALUES (1, 'Alice Smith', 'New York', 'USA', 1250.00);
-      INSERT INTO customers VALUES (2, 'Bob Jones', 'London', 'UK', 3400.50);
-      INSERT INTO customers VALUES (3, 'Charlie Brown', 'Tokyo', 'Japan', 2100.00);
-      INSERT INTO customers VALUES (4, 'Diana Prince', 'Paris', 'France', 4500.75);
-      INSERT INTO customers VALUES (5, 'Evan Wright', 'New York', 'USA', 890.25);
-    `);
-
-    // Create Orders Table
-    db.run(`
-      CREATE TABLE orders (
-        id INTEGER PRIMARY KEY,
-        customer_id INTEGER,
-        product TEXT,
-        amount REAL,
-        order_date TEXT
-      );
-      INSERT INTO orders VALUES (101, 1, 'Laptop', 1200.00, '2026-01-15');
-      INSERT INTO orders VALUES (102, 2, 'Phone', 800.00, '2026-02-01');
-      INSERT INTO orders VALUES (103, 3, 'Monitor', 350.00, '2026-02-10');
-      INSERT INTO orders VALUES (104, 4, 'Tablet', 600.00, '2026-03-05');
-      INSERT INTO orders VALUES (105, 2, 'Headphones', 150.00, '2026-03-12');
-    `);
-
-    const { registerSqliteDb, introspectSqlite } = require('../db/connectors/sqlite');
-    registerSqliteDb(dbKey, db);
-
-    const schemaMetadata = introspectSqlite(dbKey);
-
-    const dataSource = await DataSource.create({
-      name: 'Sample E-Commerce Database',
-      type: 'sqlite',
-      connectionConfig: { dbKey },
-      schemaMetadata,
-      userId
-    });
-
-    await generateSchemaTrainingChunks(dataSource._id.toString(), schemaMetadata, userId);
-
-    res.json({
-      success: true,
-      dataSource
-    });
-  } catch (error) {
-    console.error('[Sample Data Error]:', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
