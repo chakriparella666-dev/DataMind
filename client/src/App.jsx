@@ -382,6 +382,7 @@ export default function App() {
             activeDataSource={activeDataSource}
             onNavigate={(sec) => handleNavigate(sec)}
             onSelectQuery={handleSelectQuery}
+            recentQueries={workspaceRecentQueries}
           />
         )}
         {activeSection === 'workspace' && (

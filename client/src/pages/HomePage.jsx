@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Database, ExternalLink } from 'lucide-react';
 import { getSystemStats, getDataSources, getChatSessions } from '../services/api';
 
-export default function HomePage({ activeDataSource, onNavigate, onSelectQuery }) {
+export default function HomePage({ activeDataSource, onNavigate, onSelectQuery, recentQueries = [] }) {
   const [stats, setStats] = useState({
     totalDataSources: 0,
     activeDataSources: 0,
@@ -29,9 +29,38 @@ export default function HomePage({ activeDataSource, onNavigate, onSelectQuery }
         setLatestDataSources(dsRes.dataSources.slice(0, 5));
       }
 
+      let fetchedQueries = [];
       if (sessionsRes.success && Array.isArray(sessionsRes.sessions)) {
-        setLatestQueries(sessionsRes.sessions.slice(0, 5));
+        fetchedQueries = sessionsRes.sessions;
       }
+
+      try {
+        const savedLocal = localStorage.getItem('datamind_workspace_recent_queries');
+        if (savedLocal) {
+          const parsed = JSON.parse(savedLocal);
+          if (Array.isArray(parsed)) {
+            fetchedQueries = [...parsed, ...fetchedQueries];
+          }
+        }
+      } catch (e) { }
+
+      if (Array.isArray(recentQueries) && recentQueries.length > 0) {
+        fetchedQueries = [...recentQueries, ...fetchedQueries];
+      }
+
+      // Deduplicate and filter out generic titles
+      const map = new Map();
+      fetchedQueries.forEach(q => {
+        const qText = q.question || q.title || q.lastQuestion;
+        if (qText && qText !== 'New Chat' && qText !== 'Default Session') {
+          const key = qText.trim().toLowerCase();
+          if (!map.has(key)) {
+            map.set(key, { ...q, question: qText });
+          }
+        }
+      });
+
+      setLatestQueries(Array.from(map.values()).slice(0, 5));
     } catch (err) {
       console.error('Failed to fetch home page live data:', err);
     } finally {
@@ -41,7 +70,7 @@ export default function HomePage({ activeDataSource, onNavigate, onSelectQuery }
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [recentQueries]);
 
   return (
     <div className="flex-1 h-screen bg-[#18181b] text-slate-100 overflow-y-auto p-6 md:p-8 font-sans antialiased">
@@ -191,7 +220,7 @@ export default function HomePage({ activeDataSource, onNavigate, onSelectQuery }
                     }}
                   >
                     <div className="min-w-0 pr-2">
-                      <p className="text-sm font-bold text-white truncate">{q.title || q.lastQuestion || 'Database query'}</p>
+                      <p className="text-sm font-bold text-white truncate">{q.question || q.title || q.lastQuestion || 'Database query'}</p>
                       <p className="text-xs text-zinc-400">{q.mode || 'sql'}</p>
                     </div>
                     <button className="text-xs font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 shrink-0">
