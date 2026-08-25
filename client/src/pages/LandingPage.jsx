@@ -158,7 +158,8 @@ export default function LandingPage({ onLaunchWorkspace, onOpenAuth }) {
         setError(res.error || 'Invalid credentials');
       }
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Login failed. Please check your credentials.');
+      const serverMsg = err.response?.data?.error || err.response?.data?.message || err.message;
+      setError(serverMsg || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }

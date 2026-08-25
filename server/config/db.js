@@ -8,7 +8,7 @@ let isPgConnected = false;
 
 const getAppPool = () => {
   if (!pool) {
-    const isCloudPg = appPgConnectionString.includes('supabase') || appPgConnectionString.includes('neon') || appPgConnectionString.includes('sslmode=require') || appPgConnectionString.includes('amazonaws.com');
+    const isCloudPg = appPgConnectionString.includes('supabase') || appPgConnectionString.includes('neon') || appPgConnectionString.includes('sslmode=require') || appPgConnectionString.includes('amazonaws.com') || appPgConnectionString.includes('render.com') || appPgConnectionString.includes('dpg-');
     const poolConfig = {
       connectionString: appPgConnectionString,
       statement_timeout: 10000,
@@ -31,7 +31,7 @@ const ensureDatabaseExists = async () => {
     const dbName = url.pathname.replace('/', '') || 'datamind_app';
     const baseUrl = `${url.protocol}//${url.username}:${url.password}@${url.host}:${url.port || 5432}/postgres`;
 
-    const isCloud = appPgConnectionString.includes('supabase') || appPgConnectionString.includes('neon') || appPgConnectionString.includes('amazonaws.com');
+    const isCloud = appPgConnectionString.includes('supabase') || appPgConnectionString.includes('neon') || appPgConnectionString.includes('amazonaws.com') || appPgConnectionString.includes('render.com') || appPgConnectionString.includes('dpg-');
     const clientConfig = { connectionString: baseUrl, connectionTimeoutMillis: 3000 };
     if (isCloud) {
       clientConfig.ssl = { rejectUnauthorized: false };
@@ -158,9 +158,19 @@ const appQuery = async (text, params = []) => {
   return await p.query(text, params);
 };
 
+const inMemoryAppDb = {
+  users: [],
+  dataSources: [],
+  trainingChunks: [],
+  chatSessions: [],
+  chatMessages: [],
+  dashboards: []
+};
+
 module.exports = {
   getAppPool,
   initAppDb,
   appQuery,
+  inMemoryAppDb,
   isPgConnected: () => isPgConnected
 };

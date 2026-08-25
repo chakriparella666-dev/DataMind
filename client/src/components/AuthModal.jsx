@@ -185,7 +185,8 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
         setError(res.error || 'Authentication failed');
       }
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Authentication failed');
+      const serverMsg = err.response?.data?.error || err.response?.data?.message || err.message;
+      setError(serverMsg || 'Authentication failed');
     } finally {
       setLoading(false);
     }

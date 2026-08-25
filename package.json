@@ -1,0 +1,10 @@
+{
+  "name": "datamind-app",
+  "version": "1.0.0",
+  "description": "DataMind AI Text-to-SQL Agentic Platform",
+  "main": "server/server.js",
+  "scripts": {
+    "build": "cd client && npm install && npm run build && cd ../server && npm install",
+    "start": "cd server && node server.js"
+  }
+}
