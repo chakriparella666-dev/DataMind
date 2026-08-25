@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download, AlertCircle, Terminal, FileCode2, Sparkles, Trash2, Check } from 'lucide-react';
+import { Download, AlertCircle, Terminal, FileCode2, Sparkles, Trash2, Check, ChevronDown, ChevronUp } from 'lucide-react';
 import ResultTable from '../components/ResultTable';
 import ChartRenderer from '../components/ChartRenderer';
 import { sendChatMessage, deleteChatSession, getDashboards, createDashboard, updateDashboard } from '../services/api';
@@ -20,6 +20,7 @@ export default function DatabaseWorkspace({
   const [querying, setQuerying] = useState(false);
   const [error, setError] = useState('');
   const [viewType, setViewType] = useState('Table'); // 'Table' | 'Bar Chart' | 'Line Chart' | 'Pie Chart'
+  const [isRecentExpandedMobile, setIsRecentExpandedMobile] = useState(false);
 
   // Sync local question with prop when prop changes externally
   useEffect(() => {
@@ -377,18 +378,34 @@ export default function DatabaseWorkspace({
       </div>
 
       {/* Right Column: "Recent queries" Sidebar */}
-      <div className="w-full md:w-80 border-t md:border-t-0 md:border-l border-slate-800/90 bg-[#14161c] p-5 flex flex-col shrink-0">
-        <div className="flex items-center justify-between pb-3.5 border-b border-slate-800/80 mb-4">
-          <h3 className="text-sm font-bold text-white tracking-wide">Recent queries</h3>
-          <span className="text-xs text-slate-500 font-medium">Last {recentQueries.length}</span>
+      <div className="w-full md:w-80 border-t md:border-t-0 md:border-l border-slate-800/90 bg-[#14161c] p-4 md:p-5 flex flex-col shrink-0">
+        <div
+          onClick={() => setIsRecentExpandedMobile(!isRecentExpandedMobile)}
+          className="flex items-center justify-between pb-2 md:pb-3.5 border-b border-slate-800/80 cursor-pointer md:cursor-default select-none"
+        >
+          <div className="flex items-center space-x-2">
+            <h3 className="text-sm font-bold text-white tracking-wide">Recent queries</h3>
+            <span className="text-xs text-slate-500 font-medium">({recentQueries.length})</span>
+          </div>
+          <div className="flex items-center space-x-2 md:hidden">
+            <span className="text-xs text-indigo-400 font-bold">
+              {isRecentExpandedMobile ? 'Hide' : 'Show'}
+            </span>
+            <button type="button" className="text-zinc-400">
+              {isRecentExpandedMobile ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          </div>
         </div>
 
-        {recentQueries.length > 0 ? (
-          <div className="space-y-3.5 overflow-y-auto flex-1 pr-1">
-            {recentQueries.map((item) => (
+        <div className={`space-y-3.5 overflow-y-auto flex-1 pr-1 mt-3 ${isRecentExpandedMobile ? 'block' : 'hidden md:block'}`}>
+          {recentQueries.length > 0 ? (
+            recentQueries.map((item) => (
               <div
                 key={item.id}
-                onClick={() => handleSelectRecent(item)}
+                onClick={() => {
+                  handleSelectRecent(item);
+                  setIsRecentExpandedMobile(false);
+                }}
                 className={`p-3.5 rounded-xl border transition cursor-pointer relative group ${activeQuery?.question === item.question
                     ? 'bg-[#1b1e27] border-white text-white'
                     : 'bg-[#181a20] border-slate-800/80 hover:border-slate-700 text-slate-300'
@@ -414,13 +431,13 @@ export default function DatabaseWorkspace({
                   View details
                 </button>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-center p-4">
-            <p className="text-sm text-slate-500 italic">No recent queries yet</p>
-          </div>
-        )}
+            ))
+          ) : (
+            <div className="flex-1 flex items-center justify-center text-center p-4">
+              <p className="text-sm text-slate-500 italic">No recent queries yet</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
