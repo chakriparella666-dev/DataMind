@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "build": "node -e \"console.log('Server build complete')\"",
     "test": "node test_pipeline.js"
   },
   "dependencies": {
