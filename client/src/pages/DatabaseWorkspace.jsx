@@ -171,28 +171,15 @@ export default function DatabaseWorkspace({
   const handleAddToDashboard = async () => {
     if (!activeQuery) return;
     try {
-      const dashRes = await getDashboards();
-      if (dashRes.success && Array.isArray(dashRes.dashboards) && dashRes.dashboards.length > 0) {
-        const targetDashboard = dashRes.dashboards[0];
-        await updateDashboard(targetDashboard.id || targetDashboard._id, {
-          name: targetDashboard.name,
-          question: activeQuery.question,
-          sql: activeQuery.sql,
-          dataSourceId: activeDataSource ? (activeDataSource._id || activeDataSource.id) : null,
-          visibility: targetDashboard.visibility || 'Private',
-          widgets: (targetDashboard.widgets || 0) + 1
-        });
-      } else {
-        await createDashboard({
-          name: `Analytics — ${activeQuery.question.slice(0, 25)}`,
-          description: `Generated from query: ${activeQuery.question}`,
-          question: activeQuery.question,
-          sql: activeQuery.sql,
-          dataSourceId: activeDataSource ? (activeDataSource._id || activeDataSource.id) : null,
-          visibility: 'Private',
-          widgets: 1
-        });
-      }
+      await createDashboard({
+        name: `Analytics — ${activeQuery.question.slice(0, 30)}`,
+        description: `Generated from query: ${activeQuery.question}`,
+        question: activeQuery.question,
+        sql: activeQuery.sql,
+        dataSourceId: activeDataSource ? (activeDataSource._id || activeDataSource.id) : null,
+        visibility: 'Private',
+        widgets: 1
+      });
 
       setAddedSuccess(true);
       setTimeout(() => setAddedSuccess(false), 3000);
