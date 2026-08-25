@@ -8,6 +8,7 @@ import DatabaseWorkspace from './pages/DatabaseWorkspace';
 import GeneralChatPage from './pages/GeneralChatPage';
 import DashboardsPage from './pages/DashboardsPage';
 import DataSourcesPage from './pages/DataSourcesPage';
+import Logo from './components/Logo';
 import { getMe, getDataSources, getChatSessions } from './services/api';
 
 export default function App() {
@@ -359,15 +360,11 @@ export default function App() {
             >
               <Menu className="w-5 h-5" />
             </button>
-            <div
+            <Logo
+              iconSize="w-7 h-7"
+              textSize="text-base font-black text-white tracking-tight"
               onClick={() => handleNavigate('home')}
-              className="flex items-center space-x-2.5 cursor-pointer hover:opacity-80 transition"
-            >
-              <div className="w-7 h-7 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-white font-black text-xs">
-                D
-              </div>
-              <span className="text-base font-black text-white tracking-tight">DataMind</span>
-            </div>
+            />
             <div className="w-9" /> {/* Spacer */}
           </div>
         )}
