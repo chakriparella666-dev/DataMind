@@ -154,6 +154,7 @@ const initAppDb = async () => {
         created_tables JSONB DEFAULT '[]'::jsonb,
         data_source_id VARCHAR(100),
         user_id VARCHAR(100) DEFAULT 'default_user',
+        file_data BYTEA,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
@@ -170,6 +171,7 @@ const initAppDb = async () => {
       ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS auto_refresh VARCHAR(50) DEFAULT 'Off';
       ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS tags TEXT;
       ALTER TABLE file_uploads ADD COLUMN IF NOT EXISTS user_id VARCHAR(100) DEFAULT 'default_user';
+      ALTER TABLE file_uploads ADD COLUMN IF NOT EXISTS file_data BYTEA;
     `);
 
     client.release();

@@ -29,16 +29,19 @@ const sanitizeTableName = (filename) => {
 /**
  * Import uploaded CSV/Excel file directly into PostgreSQL datamind_app database
  */
-const importFileToPostgres = async (filePath, originalName) => {
+const importFileToPostgres = async (fileBufferOrPath, originalName) => {
   const ext = path.extname(originalName).toLowerCase();
   let sheets = {};
+  const isBuffer = Buffer.isBuffer(fileBufferOrPath);
 
   if (ext === '.csv') {
-    const fileContent = fs.readFileSync(filePath, 'utf8');
+    const fileContent = isBuffer ? fileBufferOrPath.toString('utf8') : fs.readFileSync(fileBufferOrPath, 'utf8');
     const parsed = Papa.parse(fileContent, { header: true, skipEmptyLines: true });
     sheets[path.basename(originalName, ext)] = parsed.data;
   } else if (ext === '.xlsx' || ext === '.xls') {
-    const workbook = XLSX.readFile(filePath);
+    const workbook = isBuffer
+      ? XLSX.read(fileBufferOrPath, { type: 'buffer' })
+      : XLSX.readFile(fileBufferOrPath);
     for (const sheetName of workbook.SheetNames) {
       const sheet = workbook.Sheets[sheetName];
       const data = XLSX.utils.sheet_to_json(sheet, { defval: '' });
@@ -95,12 +98,14 @@ const importFileToPostgres = async (filePath, originalName) => {
     createdTables.push(tableName);
   }
 
-  // Delete temp file after successful import into PostgreSQL
-  try {
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
-  } catch (e) {}
+  // If a temporary string path was provided, safely clean it up
+  if (typeof fileBufferOrPath === 'string') {
+    try {
+      if (fs.existsSync(fileBufferOrPath)) {
+        fs.unlinkSync(fileBufferOrPath);
+      }
+    } catch (e) {}
+  }
 
   return {
     tables: tablesMetadata,

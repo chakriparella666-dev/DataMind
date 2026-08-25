@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronUp, Eye, EyeOff, AlertCircle, X } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, X } from 'lucide-react';
 import { loginUser, registerUser, googleAuth } from '../services/api';
+import Logo from './Logo';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '274171578355-21jalpdk5koqa2q40ush34p2r4oq25ck.apps.googleusercontent.com';
 
@@ -203,11 +204,9 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
           <X className="w-5 h-5" />
         </button>
 
-        {/* Top Icon */}
+        {/* Top Icon / Logo */}
         <div className="flex justify-center mb-3 pt-2">
-          <div className="w-10 h-10 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-center text-white font-black shadow-md">
-            <ChevronUp className="w-6 h-6 text-white stroke-[3]" />
-          </div>
+          <Logo iconSize="w-11 h-11" showText={false} />
         </div>
 
         {/* Header Title & Subtitle */}

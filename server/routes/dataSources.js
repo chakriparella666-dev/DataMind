@@ -31,19 +31,7 @@ const getUserIdFromReq = (req) => {
   return req.headers['x-user-id'] || req.headers['x-user-email'] || 'anonymous_guest';
 };
 
-const uploadDir = path.join(__dirname, '../uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    const safeBase = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_]/g, '_');
-    cb(null, `${Date.now()}_${safeBase}${ext}`);
-  }
-});
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
@@ -138,12 +126,12 @@ router.post('/upload-file', upload.single('file'), async (req, res) => {
       return res.status(400).json({ success: false, error: 'No file uploaded.' });
     }
 
-    const { originalname, path: filePath } = req.file;
+    const { originalname, buffer: fileBuffer } = req.file;
     const userId = getUserIdFromReq(req);
     const ext = path.extname(originalname).toLowerCase();
     const type = ext === '.csv' ? 'csv' : (ext === '.xlsx' || ext === '.xls' ? 'excel' : 'postgres');
 
-    const imported = await importFileToPostgres(filePath, originalname);
+    const imported = await importFileToPostgres(fileBuffer || req.file.path, originalname);
     const schemaMetadata = { tables: imported.tables };
 
     const dataSource = await DataSource.create({
@@ -164,16 +152,17 @@ router.post('/upload-file', upload.single('file'), async (req, res) => {
     if (isPgConnected()) {
       try {
         await appQuery(
-          `INSERT INTO file_uploads (original_name, file_name, file_type, file_size, created_tables, data_source_id, user_id)
-           VALUES ($1, $2, $3, $4, $5, $6, $7);`,
+          `INSERT INTO file_uploads (original_name, file_name, file_type, file_size, created_tables, data_source_id, user_id, file_data)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8);`,
           [
             originalname,
-            req.file.filename || originalname,
+            req.file.originalname,
             type,
             req.file.size || 0,
             JSON.stringify(imported.createdTables || []),
             String(dataSource._id || dataSource.id),
-            String(userId)
+            String(userId),
+            fileBuffer || null
           ]
         );
       } catch (dbErr) {
