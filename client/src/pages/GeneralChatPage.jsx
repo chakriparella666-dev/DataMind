@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { Send, Bot, User, Sparkles, MessageSquare, Mic, MicOff, Edit2, RotateCcw, Plus, Image, X, Trash2 } from 'lucide-react';
 import FormattedMarkdown from '../components/FormattedMarkdown';
 import { sendChatMessage } from '../services/api';
@@ -21,11 +21,6 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
   // Attached File / Image State
   const [attachedImage, setAttachedImage] = useState(null);
   const fileInputRef = useRef(null);
-  const messagesEndRef = useRef(null);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading]);
 
   const handleClearChat = () => {
     setMessages([
@@ -139,15 +134,15 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full min-h-0 bg-[#18181b] text-slate-100 overflow-hidden font-sans select-none antialiased min-w-0 max-w-full relative">
+    <div className="flex-1 flex flex-col h-[100dvh] bg-[#18181b] text-slate-100 overflow-hidden font-sans select-none antialiased min-w-0 max-w-full">
       {/* Top Header */}
-      <header className="px-4 md:px-6 py-3.5 md:py-4 border-b border-[#2e2e36] bg-[#222226] flex items-center justify-between shadow-md shrink-0 z-20">
+      <header className="px-4 md:px-6 py-4 border-b border-[#2e2e36] bg-[#222226] flex items-center justify-between shadow-md shrink-0">
         <div className="flex items-center space-x-3.5 min-w-0">
           <div className="p-2.5 rounded-xl bg-[#18181b] text-white border border-[#383842] shadow-sm shrink-0">
             <MessageSquare className="w-6 h-6 text-white" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-lg md:text-2xl font-extrabold text-white tracking-tight truncate">General AI Chatbot</h2>
+            <h2 className="text-xl md:text-2xl font-extrabold text-white tracking-tight truncate">General AI Chatbot</h2>
             <p className="text-xs md:text-base text-indigo-400 font-semibold truncate">Ask SQL questions, syntax help, and database advice</p>
           </div>
         </div>
@@ -162,7 +157,7 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
       </header>
 
       {/* Messages Feed */}
-      <div className="flex-1 overflow-y-auto min-h-0 p-3 sm:p-4 md:p-8 space-y-4 sm:space-y-6 min-w-0 max-w-full overflow-x-hidden pb-4">
+      <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 min-w-0 max-w-full overflow-x-hidden">
         {messages.map(msg => (
           <div
             key={msg.id}
@@ -222,12 +217,11 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
             </div>
           </div>
         )}
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Input Bar */}
-      <footer className="p-3 sm:p-4 md:p-6 pb-5 sm:pb-6 border-t border-[#2e2e36] bg-[#222226] shrink-0 sticky bottom-0 z-30 shadow-2xl">
-        <form onSubmit={handleSend} className="max-w-5xl mx-auto flex flex-col space-y-2 sm:space-y-3">
+      <footer className="p-6 border-t border-[#2e2e36] bg-[#222226]">
+        <form onSubmit={handleSend} className="max-w-5xl mx-auto flex flex-col space-y-3">
 
           {attachedImage && (
             <div className="flex items-center space-x-2 bg-[#18181b] px-3.5 py-2 rounded-xl border border-[#383842] w-max">
@@ -243,7 +237,7 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
             </div>
           )}
 
-          <div className="flex items-center space-x-2 sm:space-x-3">
+          <div className="flex items-center space-x-3">
             <input
               type="file"
               ref={fileInputRef}
@@ -255,7 +249,7 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="p-2.5 sm:p-3 bg-[#18181b] hover:bg-[#28282e] text-zinc-300 hover:text-white rounded-xl border border-[#383842] transition cursor-pointer shrink-0"
+              className="p-3 bg-[#18181b] hover:bg-[#28282e] text-zinc-300 hover:text-white rounded-xl border border-[#383842] transition cursor-pointer"
               title="Attach File or Image"
             >
               <Plus className="w-5 h-5" />
@@ -267,12 +261,12 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
                 value={input}
                 onChange={e => setInput(e.target.value)}
                 placeholder="Ask a SQL question..."
-                className="w-full bg-[#18181b] border border-[#383842] focus:border-white focus:outline-none text-white text-sm md:text-base font-medium rounded-xl px-4 sm:px-5 py-3 sm:py-3.5 pr-10 sm:pr-12 transition shadow-inner"
+                className="w-full bg-[#18181b] border border-[#383842] focus:border-white focus:outline-none text-white text-sm md:text-base font-medium rounded-xl px-5 py-3.5 pr-12 transition shadow-inner"
               />
               <button
                 type="button"
                 onClick={toggleVoiceInput}
-                className={`absolute right-2.5 sm:right-3 top-1/2 -translate-y-1/2 p-1.5 sm:p-2 rounded-lg transition cursor-pointer ${isListening
+                className={`absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded-lg transition cursor-pointer ${isListening
                     ? 'bg-rose-600 text-white animate-pulse'
                     : 'text-zinc-400 hover:text-white'
                   }`}
@@ -285,7 +279,7 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
             <button
               type="submit"
               disabled={(!input.trim() && !attachedImage) || loading}
-              className="p-3 sm:p-3.5 bg-white hover:bg-zinc-200 text-black font-black rounded-xl transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-md shrink-0"
+              className="p-3.5 bg-white hover:bg-zinc-200 text-black font-black rounded-xl transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-md"
               title="Send Message"
             >
               <Send className="w-5 h-5" />

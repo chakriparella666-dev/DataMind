@@ -123,16 +123,33 @@ export default function App() {
     }
   });
 
-  // General Chat Persisted State per user
-  const DEFAULT_GENERAL_CHAT = [
-    {
-      id: 'welcome',
-      sender: 'agent',
-      text: 'Hello! I am your General AI Assistant. Ask me SQL questions, database design advice, how to write complex joins/CTEs, or general programming help!'
+  // General Chat Persisted State across tab navigation
+  const [generalChatMessages, setGeneralChatMessages] = useState(() => {
+    try {
+      const saved = localStorage.getItem('datamind_general_chat_messages');
+      return saved ? JSON.parse(saved) : [
+        {
+          id: 'welcome',
+          sender: 'agent',
+          text: 'Hello! I am your General AI Assistant. Ask me SQL questions, database design advice, how to write complex joins/CTEs, or general programming help!'
+        }
+      ];
+    } catch (e) {
+      return [
+        {
+          id: 'welcome',
+          sender: 'agent',
+          text: 'Hello! I am your General AI Assistant. Ask me SQL questions, database design advice, how to write complex joins/CTEs, or general programming help!'
+        }
+      ];
     }
-  ];
+  });
 
-  const [generalChatMessages, setGeneralChatMessages] = useState(DEFAULT_GENERAL_CHAT);
+  useEffect(() => {
+    try {
+      localStorage.setItem('datamind_general_chat_messages', JSON.stringify(generalChatMessages));
+    } catch (e) { }
+  }, [generalChatMessages]);
 
   // Theme Initialization on mount
   useEffect(() => {
@@ -245,29 +262,11 @@ export default function App() {
     });
   };
 
-  // Re-hydrate user-specific General Chat messages whenever currentUser changes
-  useEffect(() => {
-    try {
-      const key = getUserKey('general_chat_messages');
-      const saved = localStorage.getItem(key);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setGeneralChatMessages(parsed);
-          return;
-        }
-      }
-    } catch (e) { }
-    setGeneralChatMessages(DEFAULT_GENERAL_CHAT);
-  }, [currentUser]);
-
-  // Persist General Chat messages under current user's key
-  useEffect(() => {
-    try {
-      const key = getUserKey('general_chat_messages');
-      localStorage.setItem(key, JSON.stringify(generalChatMessages));
-    } catch (e) { }
-  }, [generalChatMessages, currentUser]);
+  const handleNewChat = () => {
+    setWorkspaceQuestion('');
+    setWorkspaceActiveQuery(null);
+    setActiveSection('workspace');
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('datamind_token');
@@ -277,7 +276,6 @@ export default function App() {
     setWorkspaceQuestion('');
     setWorkspaceActiveQuery(null);
     setWorkspaceRecentQueries([]);
-    setGeneralChatMessages(DEFAULT_GENERAL_CHAT);
     setActiveSection('landing');
     setIsAuthOpen(true);
   };
