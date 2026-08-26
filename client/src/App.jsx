@@ -9,7 +9,7 @@ import GeneralChatPage from './pages/GeneralChatPage';
 import DashboardsPage from './pages/DashboardsPage';
 import DataSourcesPage from './pages/DataSourcesPage';
 import Logo from './components/Logo';
-import { getMe, getDataSources, getChatSessions } from './services/api';
+import { getMe, getDataSources, getChatSessions, googleAuth } from './services/api';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -22,7 +22,7 @@ export default function App() {
   });
   const [isAuthChecking, setIsAuthChecking] = useState(() => {
     try {
-      return !!localStorage.getItem('datamind_token');
+      return !!localStorage.getItem('datamind_token') || window.location.hash.includes('access_token=');
     } catch (e) {
       return false;
     }
@@ -33,7 +33,7 @@ export default function App() {
       const saved = localStorage.getItem('datamind_active_section');
       const token = localStorage.getItem('datamind_token');
       const guest = localStorage.getItem('datamind_guest_active') === 'true';
-      if (!token && !guest) return 'landing';
+      if (!token && !guest && !window.location.hash.includes('access_token=')) return 'landing';
       return saved || 'workspace';
     } catch (e) {
       return 'landing';
@@ -44,8 +44,53 @@ export default function App() {
   const [dataSources, setDataSources] = useState([]);
   const [activeDataSource, setActiveDataSource] = useState(null);
 
-  // Restore authenticated user session on mount via getMe()
+  // Handle Google OAuth Redirect Return (#access_token=...) & restore authenticated user session
   useEffect(() => {
+    const hash = window.location.hash;
+    if (hash && hash.includes('access_token=')) {
+      try {
+        const params = new URLSearchParams(hash.replace('#', '?'));
+        const accessToken = params.get('access_token');
+        if (accessToken) {
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+          setIsAuthChecking(true);
+          fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { Authorization: `Bearer ${accessToken}` }
+          })
+            .then(r => r.json())
+            .then(async (profile) => {
+              if (profile.email) {
+                const res = await googleAuth({
+                  email: profile.email,
+                  name: profile.name || profile.given_name || profile.email.split('@')[0],
+                  googleId: profile.sub,
+                  avatar: profile.picture
+                });
+                if (res.success && res.token) {
+                  localStorage.setItem('datamind_token', res.token);
+                  localStorage.setItem('datamind_guest_active', 'false');
+                  setCurrentUser(res.user);
+                  setIsGuestActive(false);
+                  setDataSources([]);
+                  setActiveDataSource(null);
+                  setActiveSection('workspace');
+                  setIsAuthOpen(false);
+                }
+              }
+            })
+            .catch(err => {
+              console.warn('[Google OAuth Callback Warning]:', err.message);
+            })
+            .finally(() => {
+              setIsAuthChecking(false);
+            });
+          return;
+        }
+      } catch (e) {
+        console.warn('[Google Hash Parsing Error]:', e);
+      }
+    }
+
     const token = localStorage.getItem('datamind_token');
     if (token) {
       getMe()

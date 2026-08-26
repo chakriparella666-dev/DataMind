@@ -67,7 +67,6 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, onContinueAs
     localStorage.removeItem('datamind_guest_active');
 
     try {
-      // 1. Official Google OAuth2 Token Client (Opens Google Sign-in popup window)
       if (window.google?.accounts?.oauth2) {
         const tokenClient = window.google.accounts.oauth2.initTokenClient({
           client_id: GOOGLE_CLIENT_ID,
@@ -76,7 +75,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, onContinueAs
             if (tokenResponse.error) {
               setLoading(false);
               if (tokenResponse.error === 'popup_closed_by_user') return;
-              setError('Google OAuth Error: Please add http://localhost:3000 to Authorized JavaScript origins in Google Cloud Console.');
+              redirectToGoogleOAuth();
               return;
             }
             try {
@@ -93,7 +92,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, onContinueAs
                 });
                 if (res.success) {
                   localStorage.setItem('datamind_token', res.token);
-                  onAuthSuccess(res.user);
+                  if (onAuthSuccess) onAuthSuccess(res.user);
                   onClose();
                 } else {
                   setError(res.error || 'Google authentication failed');
@@ -112,53 +111,28 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, onContinueAs
         return;
       }
 
-      // 2. Google GSI One Tap fallback
-      if (window.google?.accounts?.id) {
-        window.google.accounts.id.initialize({
-          client_id: GOOGLE_CLIENT_ID,
-          callback: handleCredentialResponse
-        });
-        window.google.accounts.id.prompt((notification) => {
-          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-            fallbackGooglePrompt();
-          }
-        });
-        setLoading(false);
-        return;
-      }
-
-      fallbackGooglePrompt();
+      redirectToGoogleOAuth();
     } catch (err) {
-      console.warn('[Google Auth Popup Warning]:', err);
-      fallbackGooglePrompt();
+      console.warn('[Google Auth Warning]: Redirecting to Google OAuth -', err);
+      redirectToGoogleOAuth();
     }
   };
 
-  const fallbackGooglePrompt = async () => {
-    const emailPrompt = window.prompt("Enter your Google Account email:", "alex.dev@gmail.com");
-    if (!emailPrompt) {
+  const redirectToGoogleOAuth = () => {
+    try {
+      const redirectUri = window.location.origin + window.location.pathname;
+      const params = new URLSearchParams({
+        client_id: GOOGLE_CLIENT_ID,
+        redirect_uri: redirectUri,
+        response_type: 'token',
+        scope: 'email profile openid',
+        prompt: 'select_account'
+      });
+      window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+    } catch (e) {
+      setError('Failed to launch Google Sign In');
       setLoading(false);
-      return;
     }
-
-    const name = emailPrompt.split('@')[0];
-    const formattedName = name.charAt(0).toUpperCase() + name.slice(1);
-
-    const res = await googleAuth({
-      email: emailPrompt,
-      name: formattedName,
-      googleId: 'google_' + Date.now(),
-      avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(formattedName)}`
-    });
-
-    if (res.success) {
-      localStorage.setItem('datamind_token', res.token);
-      onAuthSuccess(res.user);
-      onClose();
-    } else {
-      setError(res.error || 'Google authentication failed');
-    }
-    setLoading(false);
   };
 
   const handleSubmit = async (e) => {
