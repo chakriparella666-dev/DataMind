@@ -50,7 +50,7 @@ export default function LandingPage({ onLaunchWorkspace, onOpenAuth, onContinueA
     setFormData({ ...formData, [e.target.name]: value });
   };
 
-  const handleGoogleAuthClick = async () => {
+  const handleGoogleAuthClick = () => {
     setLoading(true);
     setError(null);
 
@@ -58,56 +58,7 @@ export default function LandingPage({ onLaunchWorkspace, onOpenAuth, onContinueA
     localStorage.removeItem('datamind_token');
     localStorage.removeItem('datamind_guest_active');
 
-    try {
-      if (window.google?.accounts?.oauth2) {
-        const tokenClient = window.google.accounts.oauth2.initTokenClient({
-          client_id: GOOGLE_CLIENT_ID,
-          scope: 'email profile openid',
-          callback: async (tokenResponse) => {
-            if (tokenResponse.error) {
-              setLoading(false);
-              if (tokenResponse.error === 'popup_closed_by_user') return;
-              redirectToGoogleOAuth();
-              return;
-            }
-            try {
-              const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
-              });
-              const profile = await userInfoRes.json();
-              if (profile.email) {
-                const res = await googleAuth({
-                  email: profile.email,
-                  name: profile.name || profile.given_name || profile.email.split('@')[0],
-                  googleId: profile.sub,
-                  avatar: profile.picture
-                });
-                if (res.success) {
-                  localStorage.setItem('datamind_token', res.token);
-                  if (onAuthSuccess) onAuthSuccess(res.user);
-                  else if (onLaunchWorkspace) onLaunchWorkspace();
-                } else {
-                  setError(res.error || 'Google authentication failed');
-                }
-              } else {
-                setError('Could not retrieve Google profile details.');
-              }
-            } catch (err) {
-              setError(err.message || 'Failed to authenticate with Google');
-            } finally {
-              setLoading(false);
-            }
-          }
-        });
-        tokenClient.requestAccessToken({ prompt: 'select_account' });
-        return;
-      }
-
-      redirectToGoogleOAuth();
-    } catch (err) {
-      console.warn('[Google Auth Warning]: Redirecting to Google OAuth -', err);
-      redirectToGoogleOAuth();
-    }
+    redirectToGoogleOAuth();
   };
 
   const redirectToGoogleOAuth = () => {
