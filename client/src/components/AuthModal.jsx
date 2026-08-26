@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Eye, EyeOff, AlertCircle, X } from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, X, UserCheck } from 'lucide-react';
 import { loginUser, registerUser, googleAuth } from '../services/api';
 import Logo from './Logo';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '274171578355-21jalpdk5koqa2q40ush34p2r4oq25ck.apps.googleusercontent.com';
 
-export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
+export default function AuthModal({ isOpen, onClose, onAuthSuccess, onContinueAsGuest }) {
   const [isRegister, setIsRegister] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -230,7 +230,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
           type="button"
           onClick={handleGoogleAuthClick}
           disabled={loading}
-          className="w-full flex items-center justify-center gap-3 bg-[#161920] hover:bg-[#1f2430] text-white border border-zinc-700/80 hover:border-zinc-500 font-bold py-3.5 px-4 rounded-2xl transition-all cursor-pointer shadow-md hover:shadow-lg mb-5 active:scale-[0.99] disabled:opacity-50 group"
+          className="w-full flex items-center justify-center gap-3 bg-[#161920] hover:bg-[#1f2430] text-white border border-zinc-700/80 hover:border-zinc-500 font-bold py-3.5 px-4 rounded-2xl transition-all cursor-pointer shadow-md hover:shadow-lg mb-3 active:scale-[0.99] disabled:opacity-50 group"
         >
           <svg className="w-5 h-5 shrink-0 transition-transform group-hover:scale-110" viewBox="0 0 24 24">
             <path
@@ -254,6 +254,19 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess }) {
             {isRegister ? 'Sign up with Google' : 'Sign in with Google'}
           </span>
         </button>
+
+        {/* Continue with Guest Credentials Button */}
+        {onContinueAsGuest && (
+          <button
+            type="button"
+            onClick={onContinueAsGuest}
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-3 bg-zinc-800/90 hover:bg-zinc-700 text-slate-100 border border-zinc-700 font-bold py-3 px-4 rounded-2xl transition-all cursor-pointer shadow-sm hover:shadow mb-5 active:scale-[0.99] disabled:opacity-50"
+          >
+            <UserCheck className="w-5 h-5 text-indigo-400 shrink-0" />
+            <span className="text-sm md:text-base font-bold">Continue with Guest Credentials</span>
+          </button>
+        )}
 
         {/* Divider */}
         <div className="relative flex items-center justify-center mb-5">

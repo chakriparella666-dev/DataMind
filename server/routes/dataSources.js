@@ -146,7 +146,10 @@ router.post('/upload-file', upload.single('file'), async (req, res) => {
       userId
     });
 
-    await generateSchemaTrainingChunks(dataSource._id.toString(), schemaMetadata, userId);
+    // Run schema chunk generation asynchronously so the upload response returns instantly
+    generateSchemaTrainingChunks(dataSource._id.toString(), schemaMetadata, userId).catch(err => {
+      console.warn('[DataSources] Async schema training chunks warning:', err.message);
+    });
 
     const { appQuery, isPgConnected } = require('../config/db');
     if (isPgConnected()) {

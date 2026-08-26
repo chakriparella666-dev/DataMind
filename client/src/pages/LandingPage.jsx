@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronUp, Check, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { ChevronUp, Check, Eye, EyeOff, AlertCircle, UserCheck } from 'lucide-react';
 import { loginUser, googleAuth } from '../services/api';
 import Logo from '../components/Logo';
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID || '274171578355-21jalpdk5koqa2q40ush34p2r4oq25ck.apps.googleusercontent.com';
 
-export default function LandingPage({ onLaunchWorkspace, onOpenAuth }) {
+export default function LandingPage({ onLaunchWorkspace, onOpenAuth, onContinueAsGuest, onAuthSuccess }) {
   const [formData, setFormData] = useState({ email: '', password: '', rememberMe: false });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -18,7 +18,8 @@ export default function LandingPage({ onLaunchWorkspace, onOpenAuth }) {
       const res = await googleAuth({ credential: response.credential });
       if (res.success) {
         localStorage.setItem('datamind_token', res.token);
-        if (onLaunchWorkspace) onLaunchWorkspace();
+        if (onAuthSuccess) onAuthSuccess(res.user);
+        else if (onLaunchWorkspace) onLaunchWorkspace();
       } else {
         setError(res.error || 'Google authentication failed');
       }
@@ -79,7 +80,8 @@ export default function LandingPage({ onLaunchWorkspace, onOpenAuth }) {
                 });
                 if (res.success) {
                   localStorage.setItem('datamind_token', res.token);
-                  if (onLaunchWorkspace) onLaunchWorkspace();
+                  if (onAuthSuccess) onAuthSuccess(res.user);
+                  else if (onLaunchWorkspace) onLaunchWorkspace();
                 } else {
                   setError(res.error || 'Google authentication failed');
                 }
@@ -138,7 +140,8 @@ export default function LandingPage({ onLaunchWorkspace, onOpenAuth }) {
 
     if (res.success) {
       localStorage.setItem('datamind_token', res.token);
-      if (onLaunchWorkspace) onLaunchWorkspace();
+      if (onAuthSuccess) onAuthSuccess(res.user);
+      else if (onLaunchWorkspace) onLaunchWorkspace();
     } else {
       setError(res.error || 'Google authentication failed');
     }
@@ -153,7 +156,8 @@ export default function LandingPage({ onLaunchWorkspace, onOpenAuth }) {
       const res = await loginUser({ email: formData.email, password: formData.password });
       if (res.success) {
         localStorage.setItem('datamind_token', res.token);
-        if (onLaunchWorkspace) onLaunchWorkspace();
+        if (onAuthSuccess) onAuthSuccess(res.user);
+        else if (onLaunchWorkspace) onLaunchWorkspace();
       } else {
         setError(res.error || 'Invalid credentials');
       }
@@ -295,6 +299,19 @@ export default function LandingPage({ onLaunchWorkspace, onOpenAuth }) {
               </svg>
               <span>Continue with Google</span>
             </button>
+
+            {/* Continue with Guest Credentials Button */}
+            {onContinueAsGuest && (
+              <button
+                type="button"
+                onClick={onContinueAsGuest}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-2.5 bg-[#2a2a32] hover:bg-[#34343d] text-slate-100 border border-[#3e3e4a] hover:border-zinc-400 font-bold py-3.5 px-4 rounded-xl text-xs md:text-sm transition-all cursor-pointer shadow-sm active:scale-[0.99] disabled:opacity-50"
+              >
+                <UserCheck className="w-4 h-4 text-indigo-400 shrink-0" />
+                <span>Continue with Guest Credentials</span>
+              </button>
+            )}
 
             {/* Divider */}
             <div className="relative flex items-center justify-center">

@@ -12,18 +12,70 @@ import Logo from './components/Logo';
 import { getMe, getDataSources, getChatSessions } from './services/api';
 
 export default function App() {
-  const [activeSection, setActiveSection] = useState(() => {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isGuestActive, setIsGuestActive] = useState(() => {
     try {
-      return localStorage.getItem('datamind_active_section') || 'workspace';
+      return localStorage.getItem('datamind_guest_active') === 'true';
     } catch (e) {
-      return 'workspace';
+      return false;
     }
   });
-  const [currentUser, setCurrentUser] = useState(null);
+  const [isAuthChecking, setIsAuthChecking] = useState(() => {
+    try {
+      return !!localStorage.getItem('datamind_token');
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const [activeSection, setActiveSection] = useState(() => {
+    try {
+      const saved = localStorage.getItem('datamind_active_section');
+      const token = localStorage.getItem('datamind_token');
+      const guest = localStorage.getItem('datamind_guest_active') === 'true';
+      if (!token && !guest) return 'landing';
+      return saved || 'workspace';
+    } catch (e) {
+      return 'landing';
+    }
+  });
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [dataSources, setDataSources] = useState([]);
   const [activeDataSource, setActiveDataSource] = useState(null);
+
+  // Restore authenticated user session on mount via getMe()
+  useEffect(() => {
+    const token = localStorage.getItem('datamind_token');
+    if (token) {
+      getMe()
+        .then((res) => {
+          if (res.success && res.user) {
+            setCurrentUser(res.user);
+          } else {
+            localStorage.removeItem('datamind_token');
+            setCurrentUser(null);
+          }
+        })
+        .catch((err) => {
+          console.warn('[Session Verify Warning]:', err.message);
+          localStorage.removeItem('datamind_token');
+          setCurrentUser(null);
+        })
+        .finally(() => {
+          setIsAuthChecking(false);
+        });
+    } else {
+      setIsAuthChecking(false);
+    }
+  }, []);
+
+  // Enforce auth / guest gate: new or unauthenticated users must land on auth landing page
+  useEffect(() => {
+    if (!isAuthChecking && !currentUser && !isGuestActive && activeSection !== 'landing') {
+      setActiveSection('landing');
+    }
+  }, [isAuthChecking, currentUser, isGuestActive, activeSection]);
 
   useEffect(() => {
     try {
@@ -248,9 +300,26 @@ export default function App() {
     setActiveSection('workspace');
   };
 
+  const handleContinueAsGuest = () => {
+    localStorage.setItem('datamind_guest_active', 'true');
+    setIsGuestActive(true);
+    setActiveSection('workspace');
+    setIsAuthOpen(false);
+  };
+
+  const handleAuthSuccess = (user) => {
+    setCurrentUser(user);
+    localStorage.setItem('datamind_guest_active', 'false');
+    setIsGuestActive(false);
+    setActiveSection('workspace');
+    setIsAuthOpen(false);
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('datamind_token');
+    localStorage.removeItem('datamind_guest_active');
     setCurrentUser(null);
+    setIsGuestActive(false);
     setDataSources([]);
     setActiveDataSource(null);
     setWorkspaceQuestion('');
@@ -263,6 +332,11 @@ export default function App() {
 
   const handleNavigate = (sec, data) => {
     const targetSec = typeof sec === 'string' ? sec : 'workspace';
+    if (targetSec !== 'landing' && !currentUser && !isGuestActive) {
+      setIsAuthOpen(true);
+      setActiveSection('landing');
+      return;
+    }
     setActiveSection(targetSec);
 
     if (targetSec === 'workspace' && data) {
@@ -351,8 +425,16 @@ export default function App() {
         )}
         {activeSection === 'landing' && (
           <LandingPage
-            onLaunchWorkspace={() => setActiveSection('workspace')}
+            onLaunchWorkspace={() => {
+              if (currentUser || isGuestActive) {
+                setActiveSection('workspace');
+              } else {
+                setIsAuthOpen(true);
+              }
+            }}
+            onContinueAsGuest={handleContinueAsGuest}
             onOpenAuth={() => setIsAuthOpen(true)}
+            onAuthSuccess={handleAuthSuccess}
           />
         )}
         {activeSection === 'home' && (
@@ -407,10 +489,8 @@ export default function App() {
       <AuthModal
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
-        onAuthSuccess={(user) => {
-          setCurrentUser(user);
-          setActiveSection('workspace');
-        }}
+        onAuthSuccess={handleAuthSuccess}
+        onContinueAsGuest={handleContinueAsGuest}
       />
     </div>
   );

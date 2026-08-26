@@ -71,23 +71,36 @@ const importFileToPostgres = async (fileBufferOrPath, originalName) => {
     const createTableSql = `CREATE TABLE IF NOT EXISTS "${tableName}" (id SERIAL PRIMARY KEY, ${colDefs});`;
     await appQuery(createTableSql);
 
-    // Insert rows
-    for (const row of rows) {
-      const valCols = [];
-      const placeholders = [];
-      const params = [];
-      let pIdx = 1;
+    // Batch insert rows in PostgreSQL using transactions for high performance
+    const BATCH_SIZE = 500;
+    const colNamesSql = columns.map(c => `"${c.name}"`).join(', ');
 
-      columns.forEach(col => {
-        valCols.push(`"${col.name}"`);
-        placeholders.push(`$${pIdx++}`);
-        const rawVal = row[col.rawName];
-        params.push(rawVal !== undefined && rawVal !== null ? String(rawVal) : null);
-      });
+    if (rows.length > 0 && columns.length > 0) {
+      await appQuery('BEGIN;');
+      try {
+        for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+          const chunk = rows.slice(i, i + BATCH_SIZE);
+          const valueClauses = [];
+          const params = [];
+          let paramIdx = 1;
 
-      if (valCols.length > 0) {
-        const insertSql = `INSERT INTO "${tableName}" (${valCols.join(', ')}) VALUES (${placeholders.join(', ')});`;
-        await appQuery(insertSql, params);
+          for (const row of chunk) {
+            const rowPlaceholders = [];
+            for (const col of columns) {
+              rowPlaceholders.push(`$${paramIdx++}`);
+              const rawVal = row[col.rawName];
+              params.push(rawVal !== undefined && rawVal !== null ? String(rawVal) : null);
+            }
+            valueClauses.push(`(${rowPlaceholders.join(', ')})`);
+          }
+
+          const batchInsertSql = `INSERT INTO "${tableName}" (${colNamesSql}) VALUES ${valueClauses.join(', ')};`;
+          await appQuery(batchInsertSql, params);
+        }
+        await appQuery('COMMIT;');
+      } catch (insertErr) {
+        await appQuery('ROLLBACK;');
+        throw insertErr;
       }
     }
 
