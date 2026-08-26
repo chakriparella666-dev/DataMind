@@ -16,6 +16,7 @@ export default function Sidebar({
   onNewChat,
   currentUser,
   onOpenAuth,
+  onSwitchAccount,
   onLogout,
   isOpen = false,
   onClose
@@ -228,7 +229,8 @@ export default function Sidebar({
                     onClick={() => {
                       setShowProfileMenu(false);
                       if (onClose) onClose();
-                      onOpenAuth?.();
+                      if (onSwitchAccount) onSwitchAccount();
+                      else onOpenAuth?.();
                     }}
                     className="w-full text-left px-4 py-3 rounded-xl text-indigo-300 hover:text-indigo-200 hover:bg-indigo-950/40 flex items-center space-x-3 transition cursor-pointer font-bold border-t border-zinc-800/80 pt-3"
                   >

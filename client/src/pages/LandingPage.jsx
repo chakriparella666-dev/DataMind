@@ -33,6 +33,7 @@ export default function LandingPage({ onLaunchWorkspace, onOpenAuth, onContinueA
   useEffect(() => {
     if (window.google?.accounts?.id) {
       try {
+        window.google.accounts.id.disableAutoSelect();
         window.google.accounts.id.initialize({
           client_id: GOOGLE_CLIENT_ID,
           callback: handleCredentialResponse,

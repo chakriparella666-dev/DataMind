@@ -40,6 +40,7 @@ export default function AuthModal({ isOpen, onClose, onAuthSuccess, onContinueAs
   useEffect(() => {
     if (isOpen && window.google?.accounts?.id) {
       try {
+        window.google.accounts.id.disableAutoSelect();
         window.google.accounts.id.initialize({
           client_id: GOOGLE_CLIENT_ID,
           callback: handleCredentialResponse,

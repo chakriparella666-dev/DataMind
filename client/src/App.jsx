@@ -311,8 +311,30 @@ export default function App() {
     setCurrentUser(user);
     localStorage.setItem('datamind_guest_active', 'false');
     setIsGuestActive(false);
+    setDataSources([]);
+    setActiveDataSource(null);
+    setWorkspaceQuestion('');
+    setWorkspaceActiveQuery(null);
+    setWorkspaceRecentQueries([]);
     setActiveSection('workspace');
     setIsAuthOpen(false);
+  };
+
+  const handleSwitchAccount = () => {
+    localStorage.removeItem('datamind_token');
+    localStorage.removeItem('datamind_guest_active');
+    setCurrentUser(null);
+    setIsGuestActive(false);
+    setDataSources([]);
+    setActiveDataSource(null);
+    setWorkspaceQuestion('');
+    setWorkspaceActiveQuery(null);
+    setWorkspaceRecentQueries([]);
+    if (window.google?.accounts?.id) {
+      try { window.google.accounts.id.disableAutoSelect(); } catch (e) {}
+    }
+    setActiveSection('landing');
+    setIsAuthOpen(true);
   };
 
   const handleLogout = () => {
@@ -326,6 +348,9 @@ export default function App() {
     setWorkspaceActiveQuery(null);
     setWorkspaceRecentQueries([]);
     setGeneralChatMessages(defaultGeneralWelcome);
+    if (window.google?.accounts?.id) {
+      try { window.google.accounts.id.disableAutoSelect(); } catch (e) {}
+    }
     setActiveSection('landing');
     setIsAuthOpen(true);
   };
@@ -398,6 +423,7 @@ export default function App() {
           onNewChat={handleNewChat}
           currentUser={currentUser}
           onOpenAuth={() => setIsAuthOpen(true)}
+          onSwitchAccount={handleSwitchAccount}
           onLogout={handleLogout}
           isOpen={isMobileMenuOpen}
           onClose={() => setIsMobileMenuOpen(false)}
