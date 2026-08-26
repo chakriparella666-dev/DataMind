@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   MessageSquare, Home, LayoutDashboard, Database, Plus, Sparkles,
-  ChevronDown, Settings, LogOut, Globe, Trash2,
+  ChevronDown, Settings, LogOut, Globe, Trash2, UserCheck,
   FileSpreadsheet, Server, ChevronsUpDown, X
 } from 'lucide-react';
 import SettingsModal from './SettingsModal';
@@ -25,7 +25,7 @@ export default function Sidebar({
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   const activeUserName = currentUser ? currentUser.name : 'Guest User';
-  const activeUserEmail = currentUser ? currentUser.email : 'name@gmail.com';
+  const activeUserEmail = currentUser ? currentUser.email : 'Guest Session';
   const firstLetter = activeUserName.charAt(0).toUpperCase();
 
   const handleNav = (sec) => {
@@ -220,29 +220,55 @@ export default function Sidebar({
                 <span>Settings</span>
               </button>
 
-              {/* Log Out Item */}
+              {/* Auth / Account Actions */}
               {currentUser ? (
-                <button
-                  type="button"
-                  onClick={handleLogOutClick}
-                  className="w-full text-left px-4 py-3 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 flex items-center space-x-3 transition cursor-pointer font-bold border-t border-zinc-800/80 pt-3"
-                >
-                  <LogOut className="w-5 h-5 text-rose-400" />
-                  <span>Log Out</span>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowProfileMenu(false);
+                      if (onClose) onClose();
+                      onOpenAuth?.();
+                    }}
+                    className="w-full text-left px-4 py-3 rounded-xl text-indigo-300 hover:text-indigo-200 hover:bg-indigo-950/40 flex items-center space-x-3 transition cursor-pointer font-bold border-t border-zinc-800/80 pt-3"
+                  >
+                    <UserCheck className="w-5 h-5 text-indigo-400" />
+                    <span>Switch Account</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleLogOutClick}
+                    className="w-full text-left px-4 py-3 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 flex items-center space-x-3 transition cursor-pointer font-bold"
+                  >
+                    <LogOut className="w-5 h-5 text-rose-400" />
+                    <span>Log Out</span>
+                  </button>
+                </>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowProfileMenu(false);
-                    if (onClose) onClose();
-                    onOpenAuth?.();
-                  }}
-                  className="w-full text-left px-4 py-3 rounded-xl text-white hover:bg-zinc-800 flex items-center space-x-3 transition cursor-pointer font-bold border-t border-zinc-800/80 pt-3"
-                >
-                  <LogOut className="w-5 h-5 text-white" />
-                  <span>Sign In / Register</span>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowProfileMenu(false);
+                      if (onClose) onClose();
+                      onOpenAuth?.();
+                    }}
+                    className="w-full text-left px-4 py-3 rounded-xl text-indigo-300 hover:text-indigo-200 hover:bg-indigo-950/40 flex items-center space-x-3 transition cursor-pointer font-bold border-t border-zinc-800/80 pt-3"
+                  >
+                    <UserCheck className="w-5 h-5 text-indigo-400" />
+                    <span>Sign In / Register</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleLogOutClick}
+                    className="w-full text-left px-4 py-3 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 flex items-center space-x-3 transition cursor-pointer font-bold"
+                  >
+                    <LogOut className="w-5 h-5 text-rose-400" />
+                    <span>Exit Guest Mode</span>
+                  </button>
+                </>
               )}
             </div>
           )}

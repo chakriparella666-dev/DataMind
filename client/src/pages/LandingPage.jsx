@@ -53,6 +53,10 @@ export default function LandingPage({ onLaunchWorkspace, onOpenAuth, onContinueA
     setLoading(true);
     setError(null);
 
+    // Clear any stale local tokens before initiating new account authentication
+    localStorage.removeItem('datamind_token');
+    localStorage.removeItem('datamind_guest_active');
+
     try {
       // 1. Official Google OAuth2 Token Client (Opens Google Sign-in popup window)
       if (window.google?.accounts?.oauth2) {
