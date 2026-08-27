@@ -48,12 +48,12 @@ const getSmartGeneralReply = async (message, history = []) => {
     if (reply && reply.trim()) {
       return reply.trim();
     }
-    return `⚠️ Could not generate a response from Gemini API. Please verify that your GEMINI_API_KEY in server/.env is valid and active.`;
+    return `⚠️ Could not generate a response from DataMind AI. Please verify that your GEMINI_API_KEY in server/.env is valid and active.`;
   } catch (err) {
     if (err.message && (err.message.includes('401') || err.message.includes('Unauthorized') || err.message.includes('API_KEY'))) {
-      return `⚠️ **Gemini API Key Error**: The current \`GEMINI_API_KEY\` in \`server/.env\` is invalid or unauthorized (starts with \`AQ.Ab...\`). Please provide a valid Google AI Studio API key starting with \`AIzaSy...\` in your \`server/.env\` file.`;
+      return `⚠️ **DataMind AI Key Error**: The current \`GEMINI_API_KEY\` in \`server/.env\` is invalid or unauthorized (starts with \`AQ.Ab...\`). Please provide a valid Google AI Studio API key starting with \`AIzaSy...\` in your \`server/.env\` file.`;
     }
-    return `⚠️ **Gemini API Error**: ${err.message}`;
+    return `⚠️ **DataMind AI Error**: ${err.message}`;
   }
 };
 

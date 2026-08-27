@@ -342,6 +342,10 @@ export default function App() {
   const handleNewChat = () => {
     setWorkspaceQuestion('');
     setWorkspaceActiveQuery(null);
+    try {
+      localStorage.removeItem('datamind_workspace_question');
+      localStorage.removeItem('datamind_workspace_active_query');
+    } catch (e) {}
     setActiveSection('workspace');
   };
 

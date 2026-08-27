@@ -60,22 +60,29 @@ export default function DatabaseWorkspace({
     }, 50);
   };
 
-  // Sync local question with prop when prop changes externally
+  // Sync local question and activeQuery with props when props change externally
   useEffect(() => {
-    setLocalQuestion(question || '');
+    const nextQ = question || '';
+    setLocalQuestion(nextQ);
+    if (!nextQ) {
+      setError('');
+      if (setActiveQuery && activeQuery !== null) {
+        setActiveQuery(null);
+      }
+    }
   }, [question]);
 
-  // Auto-restore activeQuery from recentQueries if question is set but activeQuery is null
+  // Auto-restore activeQuery from recentQueries ONLY if question prop is set but activeQuery is null
   useEffect(() => {
-    if (!activeQuery && localQuestion && Array.isArray(recentQueries) && recentQueries.length > 0) {
+    if (!activeQuery && question && question.trim() && Array.isArray(recentQueries) && recentQueries.length > 0) {
       const match = recentQueries.find(q =>
-        q.question && q.question.trim().toLowerCase() === localQuestion.trim().toLowerCase()
+        q.question && q.question.trim().toLowerCase() === question.trim().toLowerCase()
       );
       if (match && setActiveQuery) {
         setActiveQuery(match);
       }
     }
-  }, [localQuestion, activeQuery, recentQueries, setActiveQuery]);
+  }, [question, activeQuery, recentQueries, setActiveQuery]);
 
   const updateQuestion = (val) => {
     setLocalQuestion(val);
@@ -149,11 +156,11 @@ export default function DatabaseWorkspace({
         if (setRecentQueries) setRecentQueries(prev => [newQueryResult, ...(prev || [])]);
         onAddSession?.(localQuestion);
       } else {
-        setError(res.error || 'Failed to process question via Gemini AI.');
+        setError(res.error || 'Failed to process question via AI Engine.');
         if (setActiveQuery) setActiveQuery(null);
       }
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Error processing query via Gemini AI.');
+      setError(err.response?.data?.error || err.message || 'Error processing query via AI Engine.');
       if (setActiveQuery) setActiveQuery(null);
     } finally {
       setQuerying(false);
@@ -307,7 +314,7 @@ export default function DatabaseWorkspace({
                   disabled={querying || !localQuestion.trim()}
                   className="px-6 py-2.5 bg-white hover:bg-zinc-200 text-black font-bold text-sm rounded-xl transition cursor-pointer shadow-md active:scale-[0.98] disabled:opacity-40"
                 >
-                  {querying ? 'Querying Gemini AI...' : 'Ask'}
+                  {querying ? 'Processing AI Query...' : 'Ask'}
                 </button>
 
                 <button
@@ -465,7 +472,7 @@ export default function DatabaseWorkspace({
             <div>
               <h3 className="text-lg font-bold text-white mb-1">Ask a question to generate SQL</h3>
               <p className="text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
-                Type your question in natural English above to convert it into dialect-correct SELECT queries via Gemini AI and view live results.
+                Type your question in natural English above to convert it into dialect-correct SELECT queries via DataMind AI and view live results.
               </p>
             </div>
           </div>
