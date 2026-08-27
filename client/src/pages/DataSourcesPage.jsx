@@ -249,66 +249,73 @@ export default function DataSourcesPage({ activeDataSource, onConnectSuccess, on
                   </div>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm md:text-base text-slate-300">
-                    <thead>
-                      <tr className="border-b border-[#2e2e36] text-zinc-400 font-bold uppercase tracking-wider text-xs">
-                        <th className="py-3.5 px-4">Name</th>
-                        <th className="py-3.5 px-4">Type</th>
-                        <th className="py-3.5 px-4">Status</th>
-                        <th className="py-3.5 px-4 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#2e2e36]">
-                      {dataSources.map((ds) => {
-                        const isSelected = activeDataSource && String(ds.id || ds._id) === String(activeDataSource.id || activeDataSource._id);
-                        return (
-                          <tr key={ds.id || ds._id} className="hover:bg-[#28282e] transition">
-                            <td className="py-4 px-4 font-bold text-white flex items-center space-x-3">
-                              <Database className="w-5 h-5 text-indigo-400 shrink-0" />
-                              <span>{ds.name}</span>
-                              {isSelected && (
-                                <span className="ml-2 px-2.5 py-0.5 bg-indigo-950 border border-indigo-700/60 text-indigo-300 rounded-md text-xs font-bold">
-                                  Active
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-4 px-4 uppercase text-xs font-semibold text-zinc-300">
+                <div className="space-y-4">
+                  {dataSources.map((ds) => {
+                    const isSelected = activeDataSource && String(ds.id || ds._id) === String(activeDataSource.id || activeDataSource._id);
+                    return (
+                      <div
+                        key={ds.id || ds._id}
+                        className={`p-4 md:p-5 rounded-2xl border transition shadow-md flex flex-col gap-4 ${
+                          isSelected
+                            ? 'bg-[#1e1e24] border-[#5850ec]/60'
+                            : 'bg-[#18181b] border-[#2e2e36] hover:bg-[#25252b]'
+                        }`}
+                      >
+                        {/* Top: Dataset Name & Active Indicator */}
+                        <div className="flex items-start justify-between gap-3 min-w-0">
+                          <div className="flex items-start space-x-3 min-w-0 flex-1">
+                            <div className="p-2.5 bg-[#222226] border border-[#33333b] rounded-xl text-indigo-400 shrink-0 mt-0.5">
+                              <Database className="w-5 h-5" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <h3 className="font-bold text-white text-base md:text-lg break-all leading-snug">
+                                {ds.name}
+                              </h3>
+                            </div>
+                          </div>
+                          {isSelected && (
+                            <span className="px-3 py-1 bg-indigo-950 border border-indigo-700/60 text-indigo-300 rounded-lg text-xs font-bold shrink-0">
+                              Active
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Options & Actions placed below dataset name */}
+                        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-[#2e2e36]/80">
+                          <div className="flex items-center space-x-2">
+                            <span className="px-3 py-1 bg-[#222226] border border-[#33333b] uppercase text-xs font-bold text-zinc-300 rounded-lg tracking-wider">
                               {ds.type}
-                            </td>
-                            <td className="py-4 px-4">
-                              <span className="inline-block px-3 py-1 bg-emerald-950/80 border border-emerald-800/60 text-emerald-300 rounded-lg text-xs font-semibold">
-                                {ds.status || 'Active'}
+                            </span>
+                            <span className="px-3 py-1 bg-emerald-950/80 border border-emerald-800/60 text-emerald-300 rounded-lg text-xs font-semibold">
+                              {ds.status || 'Active'}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center space-x-2.5">
+                            {isSelected ? (
+                              <span className="px-4 py-2 bg-emerald-950/80 border border-emerald-700/80 text-emerald-300 text-xs md:text-sm font-bold rounded-xl flex items-center space-x-1.5 shadow-sm">
+                                <Check className="w-4 h-4 text-emerald-400" />
+                                <span>Selected</span>
                               </span>
-                            </td>
-                            <td className="py-4 px-4 text-right">
-                              <div className="flex items-center justify-end space-x-2.5">
-                                {isSelected ? (
-                                  <span className="px-3.5 py-2 bg-emerald-950/80 border border-emerald-700/80 text-emerald-300 text-xs md:text-sm font-bold rounded-xl flex items-center space-x-1.5">
-                                    <Check className="w-4 h-4 text-emerald-400" />
-                                    <span>Selected</span>
-                                  </span>
-                                ) : (
-                                  <button
-                                    onClick={() => handleSelect(ds)}
-                                    className="px-4 py-2 bg-[#5850ec] hover:bg-[#4f46e5] text-white text-xs md:text-sm font-bold rounded-xl transition cursor-pointer shadow-sm active:scale-[0.98]"
-                                  >
-                                    Select
-                                  </button>
-                                )}
-                                <button
-                                  onClick={() => handleDelete(ds.id || ds._id)}
-                                  className="px-3.5 py-2 border border-rose-800/80 hover:bg-rose-950/40 text-rose-400 text-xs md:text-sm font-bold rounded-xl transition cursor-pointer"
-                                >
-                                  Delete
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                            ) : (
+                              <button
+                                onClick={() => handleSelect(ds)}
+                                className="px-4 py-2 bg-[#5850ec] hover:bg-[#4f46e5] text-white text-xs md:text-sm font-bold rounded-xl transition cursor-pointer shadow-sm active:scale-[0.98]"
+                              >
+                                Select
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleDelete(ds.id || ds._id)}
+                              className="px-3.5 py-2 border border-rose-800/80 hover:bg-rose-950/40 text-rose-400 text-xs md:text-sm font-bold rounded-xl transition cursor-pointer"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

@@ -198,17 +198,17 @@ export default function DatabaseWorkspace({
       <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 min-w-0 max-w-full overflow-x-hidden">
 
         {/* Top Active Data Source Header Card */}
-        <div className="bg-[#181a20] border border-slate-800/90 rounded-2xl p-4 md:p-6 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
+        <div className="bg-[#181a20] border border-slate-800/90 rounded-2xl p-4 md:p-6 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 min-w-0 w-full overflow-hidden">
+          <div className="min-w-0 flex-1">
             <h2 className="text-lg font-bold text-white mb-1">Ask a question</h2>
-            <p className="text-xs md:text-sm text-zinc-400 font-medium truncate">
+            <p className="text-xs md:text-sm text-zinc-400 font-medium truncate" title={`${dbDisplayName} — ${dbTypeDisplay}`}>
               {dbDisplayName} — <span className="uppercase text-white font-bold">{dbTypeDisplay}</span>
             </p>
           </div>
 
           {Array.isArray(dataSources) && dataSources.length > 0 && (
-            <div className="flex items-center space-x-2">
-              <label htmlFor="ds-selector" className="text-xs font-semibold text-zinc-400 hidden sm:inline">Active Dataset:</label>
+            <div className="flex items-center space-x-2 min-w-0 w-full sm:w-auto shrink-0">
+              <label htmlFor="ds-selector" className="text-xs font-semibold text-zinc-400 hidden sm:inline shrink-0">Active Dataset:</label>
               <select
                 id="ds-selector"
                 value={activeDataSource ? String(activeDataSource.id || activeDataSource._id) : ''}
@@ -220,13 +220,16 @@ export default function DatabaseWorkspace({
                     setError('');
                   }
                 }}
-                className="bg-[#111318] border border-slate-700 hover:border-white text-white text-xs md:text-sm font-semibold rounded-xl px-3.5 py-2 transition cursor-pointer focus:outline-none shadow-sm max-w-full"
+                className="bg-[#111318] border border-slate-700 hover:border-white text-white text-xs md:text-sm font-semibold rounded-xl px-3.5 py-2 transition cursor-pointer focus:outline-none shadow-sm w-full sm:w-64 md:w-72 max-w-full truncate"
               >
-                {dataSources.map(ds => (
-                  <option key={ds.id || ds._id} value={String(ds.id || ds._id)}>
-                    {ds.name} ({ds.type || 'DATABASE'})
-                  </option>
-                ))}
+                {dataSources.map(ds => {
+                  const label = ds.name.length > 36 ? ds.name.slice(0, 33) + '...' : ds.name;
+                  return (
+                    <option key={ds.id || ds._id} value={String(ds.id || ds._id)} title={ds.name}>
+                      {label} ({ds.type || 'DATABASE'})
+                    </option>
+                  );
+                })}
               </select>
             </div>
           )}
@@ -288,9 +291,9 @@ export default function DatabaseWorkspace({
 
         {/* Error Alert */}
         {error && (
-          <div className="p-4 bg-rose-950/60 border border-rose-800/80 rounded-xl text-rose-300 text-sm flex items-center gap-2.5">
-            <AlertCircle className="w-5 h-5 shrink-0 text-rose-400" />
-            <span>{error}</span>
+          <div className="p-4 bg-rose-950/60 border border-rose-800/80 rounded-xl text-rose-300 text-sm flex items-start sm:items-center gap-2.5 min-w-0 max-w-full overflow-hidden break-words">
+            <AlertCircle className="w-5 h-5 shrink-0 text-rose-400 mt-0.5 sm:mt-0" />
+            <span className="min-w-0 flex-1 break-words break-all">{error}</span>
           </div>
         )}
 

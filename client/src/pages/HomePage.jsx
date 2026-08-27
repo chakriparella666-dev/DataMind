@@ -73,8 +73,8 @@ export default function HomePage({ activeDataSource, onNavigate, onSelectQuery, 
   }, [recentQueries]);
 
   return (
-    <div className="flex-1 h-screen bg-[#18181b] text-slate-100 overflow-y-auto p-6 md:p-8 font-sans antialiased">
-      <div className="max-w-6xl w-full mx-auto space-y-6">
+    <div className="flex-1 h-screen bg-[#18181b] text-slate-100 overflow-y-auto overflow-x-hidden p-6 md:p-8 font-sans antialiased min-w-0 max-w-full">
+      <div className="max-w-6xl w-full mx-auto space-y-6 min-w-0 max-w-full">
         
         {/* Quick Start Banner Card */}
         <div className="bg-[#222226] border border-[#2e2e36] rounded-2xl p-6 md:p-7 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -175,17 +175,17 @@ export default function HomePage({ activeDataSource, onNavigate, onSelectQuery, 
                 No data sources yet.
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-3 min-w-0">
                 {latestDataSources.map(ds => (
-                  <div key={ds._id || ds.id} className="p-3.5 bg-[#18181b] border border-[#2e2e36] rounded-xl flex items-center justify-between">
-                    <div className="flex items-center space-x-3">
+                  <div key={ds._id || ds.id} className="p-3.5 bg-[#18181b] border border-[#2e2e36] rounded-xl flex items-center justify-between gap-3 min-w-0">
+                    <div className="flex items-center space-x-3 min-w-0 flex-1">
                       <Database className="w-5 h-5 text-indigo-400 shrink-0" />
-                      <div>
-                        <p className="text-sm font-bold text-white">{ds.name}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-bold text-white truncate" title={ds.name}>{ds.name}</p>
                         <p className="text-xs text-zinc-400 uppercase font-semibold">{ds.type}</p>
                       </div>
                     </div>
-                    <span className="text-xs font-semibold px-2.5 py-1 rounded bg-emerald-950 text-emerald-300 border border-emerald-800/60">
+                    <span className="text-xs font-semibold px-2.5 py-1 rounded bg-emerald-950 text-emerald-300 border border-emerald-800/60 shrink-0">
                       Active
                     </span>
                   </div>
