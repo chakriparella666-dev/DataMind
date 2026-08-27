@@ -29,12 +29,12 @@ const getUserIdFromReq = (req) => {
  */
 router.post('/chat', async (req, res) => {
   try {
-    const { message, sessionId, dataSourceId, mode = 'sql' } = req.body;
+    const { message, sessionId, dataSourceId, mode = 'sql', image } = req.body;
     const userId = getUserIdFromReq(req);
     const effectiveSessionId = (sessionId && sessionId !== 'default_session') ? sessionId : `${mode}_${userId}`;
 
-    if (!message) {
-      return res.status(400).json({ success: false, error: 'Message is required.' });
+    if (!message && !image) {
+      return res.status(400).json({ success: false, error: 'Message or image is required.' });
     }
 
     let dataSource = null;
@@ -47,10 +47,11 @@ router.post('/chat', async (req, res) => {
 
     // Process via Agent Pipeline
     const agentResult = await processUserMessage({
-      message,
+      message: message || 'Please analyze this uploaded image and provide detailed information about it.',
       dataSource,
       history: req.body.history || [],
-      mode
+      mode,
+      image
     });
 
     // Save message to session history scoped to user

@@ -32,19 +32,20 @@ Respond strictly with a JSON object: { "intent": "sql_question" } or { "intent":
 /**
  * Generates smart responses for General AI Chatbot mode strictly via Gemini API key
  */
-const getSmartGeneralReply = async (message, history = []) => {
+const getSmartGeneralReply = async (message, history = [], image = null) => {
   // Keep last 6 turns and truncate past responses to max 300 chars for sub-2-second ultra-fast execution
   const recentHistory = (history || []).slice(-6);
   const historyText = recentHistory
     .map(h => `${h.sender === 'user' ? 'User' : 'Assistant'}: ${(h.text || '').slice(0, 300)}`)
     .join('\n');
 
-  const systemPrompt = `You are DataMind General AI Assistant. Help the user with SQL syntax, database normalization, query optimizations, indexes, CTEs, joins, or general software engineering questions. Keep your answers clear, helpful, concise, and formatted in clean markdown.`;
+  const systemPrompt = `You are DataMind General AI Assistant. Help the user with SQL syntax, database normalization, query optimizations, indexes, CTEs, joins, general software engineering questions, or analyzing uploaded images.
+When an image is provided, analyze the image thoroughly and explain its contents, text, tables, diagrams, database models, charts, code screenshots, or objects in clear, comprehensive markdown.`;
 
-  const userPrompt = `${historyText ? `Recent Conversation Context:\n${historyText}\n\n` : ''}User Question: "${message}"`;
+  const userPrompt = `${historyText ? `Recent Conversation Context:\n${historyText}\n\n` : ''}User Question: "${message || 'Please analyze this uploaded image and provide detailed information about it.'}"`;
 
   try {
-    const reply = await generateGeminiText(userPrompt, systemPrompt, 'gemini-3.5-flash-lite');
+    const reply = await generateGeminiText(userPrompt, systemPrompt, 'gemini-1.5-flash', image);
     if (reply && reply.trim()) {
       return reply.trim();
     }
@@ -141,10 +142,10 @@ const verifySchemaRelevance = (message, dataSource) => {
 /**
  * Main Agent Pipeline powered 100% by Google Gemini AI API
  */
-const processUserMessage = async ({ message, dataSource, history = [], mode = 'sql' }) => {
-  // 1. General Chat Mode - Dynamically processed via Gemini API
-  if (mode === 'general') {
-    const reply = await getSmartGeneralReply(message, history);
+const processUserMessage = async ({ message, dataSource, history = [], mode = 'sql', image = null }) => {
+  // 1. General Chat Mode & Multimodal Image Processing
+  if (mode === 'general' || image) {
+    const reply = await getSmartGeneralReply(message, history, image);
     return {
       intent: 'general_chat',
       text: reply

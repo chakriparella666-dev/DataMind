@@ -35,7 +35,31 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
   const handleFileSelect = (e) => {
     const selectedFile = e.target.files[0];
     if (selectedFile) {
-      setAttachedImage(selectedFile);
+      if (selectedFile.type && selectedFile.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const base64Url = event.target.result;
+          const pureBase64 = base64Url.split(',')[1] || '';
+          setAttachedImage({
+            file: selectedFile,
+            name: selectedFile.name,
+            type: selectedFile.type,
+            preview: base64Url,
+            data: pureBase64,
+            mimeType: selectedFile.type
+          });
+        };
+        reader.readAsDataURL(selectedFile);
+      } else {
+        setAttachedImage({
+          file: selectedFile,
+          name: selectedFile.name,
+          type: selectedFile.type || 'file',
+          preview: null,
+          data: null,
+          mimeType: selectedFile.type || ''
+        });
+      }
     }
   };
 
@@ -96,22 +120,33 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
     if ((!input.trim() && !attachedImage) || loading) return;
 
     let userText = input.trim();
-    if (attachedImage) {
-      userText = `[Attached File: ${attachedImage.name}] ` + userText;
-    }
+    const imagePayload = (attachedImage && attachedImage.data) ? {
+      data: attachedImage.data,
+      mimeType: attachedImage.mimeType
+    } : null;
 
+    const currentAttached = attachedImage;
     setInput('');
     setAttachedImage(null);
-    const userMsg = { id: 'u_' + Date.now(), sender: 'user', text: userText };
+
+    const userMsg = {
+      id: 'u_' + Date.now(),
+      sender: 'user',
+      text: userText,
+      imagePreview: currentAttached?.preview || null,
+      imageName: currentAttached?.name || null
+    };
+
     setMessages(prev => [...prev, userMsg]);
-    onAddSession?.(userText);
+    onAddSession?.(userText || `[Uploaded Image: ${currentAttached?.name || 'Image'}]`);
     setLoading(true);
 
     try {
       const res = await sendChatMessage({
-        message: userText,
+        message: userText || 'Please analyze this uploaded image and provide detailed information about it.',
         history: messages,
-        mode: 'general'
+        mode: 'general',
+        image: imagePayload
       });
 
       const botReplyText = res.text || res.reply || res.message || 'How can I assist you with your database or software engineering questions today?';
@@ -175,18 +210,33 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
             {msg.sender === 'user' ? (
               <div className="flex flex-col items-end space-y-2 max-w-[85%] md:max-w-xl min-w-0">
                 <div className="px-3.5 md:px-5 py-2.5 md:py-4 bg-[#262630] border border-[#3d3d4d] text-slate-100 font-medium rounded-2xl rounded-tr-none text-xs md:text-base leading-relaxed shadow-lg break-words overflow-hidden max-w-full">
-                  {msg.text}
+                  {msg.imagePreview && (
+                    <div className="mb-2.5">
+                      <img
+                        src={msg.imagePreview}
+                        alt={msg.imageName || 'Uploaded image'}
+                        className="max-w-full md:max-w-md rounded-xl border border-[#48485a] shadow-md object-cover max-h-72 cursor-pointer hover:opacity-95 transition"
+                        onClick={() => window.open(msg.imagePreview, '_blank')}
+                      />
+                      {msg.imageName && (
+                        <p className="text-[11px] text-zinc-400 mt-1 font-mono italic">📷 {msg.imageName}</p>
+                      )}
+                    </div>
+                  )}
+                  {msg.text ? msg.text : (!msg.imagePreview && msg.text)}
                 </div>
                 <div className="flex items-center space-x-2 text-xs text-zinc-400 opacity-90 group-hover:opacity-100 transition-opacity">
-                  <button
-                    type="button"
-                    onClick={() => setInput(msg.text.replace(/^\[Attached File: [^\]]+\]\s*/, ''))}
-                    className="hover:text-white flex items-center space-x-1.5 bg-[#222226] hover:bg-[#2a2a30] px-2.5 py-1 rounded-lg border border-[#383842] text-zinc-300 font-semibold transition cursor-pointer text-xs"
-                    title="Rewrite / Edit Question"
-                  >
-                    <Edit2 className="w-3 h-3 text-zinc-400" />
-                    <span>Rewrite</span>
-                  </button>
+                  {msg.text && (
+                    <button
+                      type="button"
+                      onClick={() => setInput(msg.text.replace(/^\[Attached File: [^\]]+\]\s*/, ''))}
+                      className="hover:text-white flex items-center space-x-1.5 bg-[#222226] hover:bg-[#2a2a30] px-2.5 py-1 rounded-lg border border-[#383842] text-zinc-300 font-semibold transition cursor-pointer text-xs"
+                      title="Rewrite / Edit Question"
+                    >
+                      <Edit2 className="w-3 h-3 text-zinc-400" />
+                      <span>Rewrite</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => handleUndoMessage(msg.id)}
@@ -224,13 +274,26 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
         <form onSubmit={handleSend} className="max-w-5xl mx-auto flex flex-col space-y-2.5">
 
           {attachedImage && (
-            <div className="flex items-center space-x-2 bg-[#18181b] px-3 py-1.5 rounded-xl border border-[#383842] w-max">
-              <Image className="w-4 h-4 text-indigo-400" />
-              <span className="text-xs font-semibold text-zinc-200">{attachedImage.name}</span>
+            <div className="flex items-center space-x-2.5 bg-[#18181b] p-2 pr-3 rounded-xl border border-[#383842] w-max max-w-full">
+              {attachedImage.preview ? (
+                <img
+                  src={attachedImage.preview}
+                  alt={attachedImage.name}
+                  className="w-10 h-10 rounded-lg object-cover border border-[#48485a]"
+                />
+              ) : (
+                <Image className="w-5 h-5 text-indigo-400 ml-1" />
+              )}
+              <div className="flex flex-col min-w-0 pr-1">
+                <span className="text-xs font-semibold text-zinc-200 truncate max-w-xs">{attachedImage.name}</span>
+                <span className="text-[10px] text-indigo-400 font-mono">
+                  {attachedImage.preview ? 'Image Ready for AI Analysis' : 'File attached'}
+                </span>
+              </div>
               <button
                 type="button"
                 onClick={() => setAttachedImage(null)}
-                className="text-zinc-400 hover:text-white transition"
+                className="text-zinc-400 hover:text-white p-1 hover:bg-[#28282e] rounded-lg transition"
               >
                 <X className="w-4 h-4" />
               </button>

@@ -5,8 +5,11 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 /**
  * Generate completion using Gemini API with auto-retry and model failover
  */
-const generateGeminiText = async (prompt, systemInstruction = '', preferredModel = 'gemini-3.5-flash-lite') => {
+const generateGeminiText = async (prompt, systemInstruction = '', preferredModel = 'gemini-1.5-flash', image = null) => {
   const modelsToTry = [
+    'gemini-1.5-flash',
+    'gemini-2.0-flash',
+    'gemini-1.5-pro',
     'gemini-3.5-flash-lite',
     'gemini-3.5-flash',
     'gemini-3.6-flash',
@@ -29,7 +32,23 @@ const generateGeminiText = async (prompt, systemInstruction = '', preferredModel
         if (!model) break;
 
         const fullPrompt = systemInstruction ? `${systemInstruction}\n\n${prompt}` : prompt;
-        const result = await model.generateContent(fullPrompt);
+        
+        let contents;
+        if (image && image.data && image.mimeType) {
+          contents = [
+            fullPrompt,
+            {
+              inlineData: {
+                data: image.data,
+                mimeType: image.mimeType
+              }
+            }
+          ];
+        } else {
+          contents = fullPrompt;
+        }
+
+        const result = await model.generateContent(contents);
         const response = await result.response;
         const text = response.text();
         if (text && text.trim()) {
