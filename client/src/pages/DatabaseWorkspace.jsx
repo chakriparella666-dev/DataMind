@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Download, AlertCircle, Terminal, FileCode2, Sparkles, Trash2, Check, ChevronDown, ChevronUp, X } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Download, AlertCircle, Terminal, FileCode2, Sparkles, Trash2, Check, ChevronDown, ChevronUp, X, Columns, HelpCircle } from 'lucide-react';
 import ResultTable from '../components/ResultTable';
 import ChartRenderer from '../components/ChartRenderer';
+import DatasetColumnsAssistant from '../components/DatasetColumnsAssistant';
 import { sendChatMessage, deleteChatSession, getDashboards, createDashboard, updateDashboard } from '../services/api';
 
 export default function DatabaseWorkspace({
@@ -21,6 +22,43 @@ export default function DatabaseWorkspace({
   const [error, setError] = useState('');
   const [viewType, setViewType] = useState('Table'); // 'Table' | 'Bar Chart' | 'Line Chart' | 'Pie Chart'
   const [isRecentExpandedMobile, setIsRecentExpandedMobile] = useState(false);
+  const [showColumnsDrawer, setShowColumnsDrawer] = useState(true);
+  const textareaRef = useRef(null);
+
+  const handleInsertText = (textToInsert) => {
+    if (!textareaRef.current) {
+      const newText = localQuestion ? `${localQuestion.trim()} ${textToInsert}` : textToInsert;
+      updateQuestion(newText);
+      return;
+    }
+
+    const input = textareaRef.current;
+    const start = input.selectionStart ?? localQuestion.length;
+    const end = input.selectionEnd ?? localQuestion.length;
+
+    const before = localQuestion.substring(0, start);
+    const after = localQuestion.substring(end);
+
+    const spaceBefore = before.length > 0 && !before.endsWith(' ') ? ' ' : '';
+    const spaceAfter = after.length > 0 && !after.startsWith(' ') ? ' ' : ' ';
+
+    const updated = `${before}${spaceBefore}${textToInsert}${spaceAfter}${after}`;
+    updateQuestion(updated);
+
+    setTimeout(() => {
+      input.focus();
+      const newCursorPos = (before + spaceBefore + textToInsert + spaceAfter).length;
+      input.setSelectionRange(newCursorPos, newCursorPos);
+    }, 50);
+  };
+
+  const handleSelectQuestion = (qText) => {
+    updateQuestion(qText);
+    setError('');
+    setTimeout(() => {
+      if (textareaRef.current) textareaRef.current.focus();
+    }, 50);
+  };
 
   // Sync local question with prop when prop changes externally
   useEffect(() => {
@@ -255,20 +293,34 @@ export default function DatabaseWorkspace({
           </div>
           <form onSubmit={handleAsk} className="space-y-4">
             <textarea
+              ref={textareaRef}
               rows={3}
               value={localQuestion}
               onChange={(e) => updateQuestion(e.target.value)}
               placeholder="Ask a question about your database..."
               className="w-full bg-[#121419] border border-slate-700/80 focus:border-white focus:outline-none rounded-xl p-4 text-sm md:text-base text-white placeholder-slate-500 transition resize-none leading-relaxed"
             />
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center space-x-3 gap-y-2">
                 <button
                   type="submit"
                   disabled={querying || !localQuestion.trim()}
                   className="px-6 py-2.5 bg-white hover:bg-zinc-200 text-black font-bold text-sm rounded-xl transition cursor-pointer shadow-md active:scale-[0.98] disabled:opacity-40"
                 >
                   {querying ? 'Querying Gemini AI...' : 'Ask'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowColumnsDrawer(!showColumnsDrawer)}
+                  className={`px-4 py-2.5 rounded-xl border text-sm font-bold transition cursor-pointer flex items-center space-x-1.5 ${
+                    showColumnsDrawer
+                      ? 'bg-indigo-950/80 border-indigo-500/80 text-indigo-200'
+                      : 'bg-[#121419] hover:bg-slate-800 border-slate-700/80 text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <Columns className="w-4 h-4 text-indigo-400" />
+                  <span>{showColumnsDrawer ? 'Hide Columns & Suggestions' : 'View Columns & Suggestions'}</span>
                 </button>
 
                 {localQuestion && (
@@ -295,6 +347,16 @@ export default function DatabaseWorkspace({
             <AlertCircle className="w-5 h-5 shrink-0 text-rose-400 mt-0.5 sm:mt-0" />
             <span className="min-w-0 flex-1 break-words break-all">{error}</span>
           </div>
+        )}
+
+        {/* Dataset Columns Assistant & Sheet Suggestions Box */}
+        {activeDataSource && (showColumnsDrawer || (error && (error.toLowerCase().includes('not related') || error.toLowerCase().includes('database')))) && (
+          <DatasetColumnsAssistant
+            activeDataSource={activeDataSource}
+            onInsertText={handleInsertText}
+            onSelectQuestion={handleSelectQuestion}
+            isNotRelated={Boolean(error && (error.toLowerCase().includes('not related') || error.toLowerCase().includes('database')))}
+          />
         )}
 
         {/* Generated SQL Card & Results OR Empty State */}

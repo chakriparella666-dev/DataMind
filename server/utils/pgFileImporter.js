@@ -106,7 +106,8 @@ const importFileToPostgres = async (fileBufferOrPath, originalName) => {
 
     tablesMetadata.push({
       name: tableName,
-      columns: columns.map(c => ({ name: c.name, type: 'TEXT' }))
+      rawSheetName: rawSheetName,
+      columns: columns.map(c => ({ name: c.name, rawName: c.rawName, type: 'TEXT' }))
     });
     createdTables.push(tableName);
   }
