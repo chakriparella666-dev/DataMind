@@ -225,10 +225,11 @@ export default function DatabaseWorkspace({
   const handleAddToDashboard = async () => {
     if (!activeQuery) return;
     try {
+      const fullQ = (activeQuery.question || 'Database Query').trim();
       await createDashboard({
-        name: `Analytics — ${activeQuery.question.slice(0, 30)}`,
-        description: `Generated from query: ${activeQuery.question}`,
-        question: activeQuery.question,
+        name: fullQ,
+        description: `Generated from query: ${fullQ}`,
+        question: fullQ,
         sql: activeQuery.sql,
         dataSourceId: activeDataSource ? (activeDataSource._id || activeDataSource.id) : null,
         visibility: 'Private',

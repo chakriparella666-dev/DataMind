@@ -182,27 +182,31 @@ export default function DashboardsPage({ onNavigate }) {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {dashboards.map((dash) => (
-                    <div
-                      key={dash.id || dash._id}
-                      className="bg-[#18181b] border border-[#2e2e36] hover:border-zinc-500 rounded-2xl p-5 shadow-lg flex flex-col justify-between space-y-4 transition"
-                    >
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2.5 text-indigo-400 font-bold text-sm">
-                            <LayoutDashboard className="w-4 h-4" />
-                            <span className="text-white text-base">{dash.name}</span>
+                  {dashboards.map((dash) => {
+                    const fullQuestionText = dash.question || dash.description?.replace(/^Generated from query:\s*/i, '') || dash.name?.replace(/^Analytics\s*—\s*/i, '') || 'Database Query';
+                    const fullDescText = `Generated from query: ${fullQuestionText}`;
+
+                    return (
+                      <div
+                        key={dash.id || dash._id}
+                        className="bg-[#18181b] border border-[#2e2e36] hover:border-zinc-500 rounded-2xl p-5 shadow-lg flex flex-col justify-between space-y-4 transition"
+                      >
+                        <div className="space-y-2.5">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start space-x-2 text-amber-400 font-bold text-sm min-w-0 flex-1">
+                              <LayoutDashboard className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                              <span className="text-white text-sm md:text-base font-bold leading-snug break-words" title={fullQuestionText}>
+                                {fullQuestionText}
+                              </span>
+                            </div>
+                            <span className="px-2.5 py-0.5 bg-[#222226] border border-[#33333b] text-zinc-300 text-[11px] font-semibold rounded-md shrink-0">
+                              {dash.visibility || 'Private'}
+                            </span>
                           </div>
-                          <span className="px-2.5 py-0.5 bg-[#222226] border border-[#33333b] text-zinc-300 text-xs font-semibold rounded-md">
-                            {dash.visibility || 'Private'}
-                          </span>
-                        </div>
-                        {dash.description && (
-                          <p className="text-xs text-zinc-400 leading-relaxed line-clamp-2">
-                            {dash.description}
+                          <p className="text-xs text-zinc-400 leading-relaxed font-medium break-words" title={fullDescText}>
+                            {fullDescText}
                           </p>
-                        )}
-                      </div>
+                        </div>
 
                       <div className="pt-3 border-t border-[#2e2e36] flex items-center justify-between">
                         <span className="text-xs font-bold text-zinc-400">
@@ -224,7 +228,8 @@ export default function DashboardsPage({ onNavigate }) {
                         </div>
                       </div>
                     </div>
-                  ))}
+                  );
+                })}
                 </div>
               )}
             </div>
