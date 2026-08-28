@@ -38,17 +38,22 @@ router.post('/chat', async (req, res) => {
     }
 
     let dataSource = null;
+    let allUserSources = [];
+    try {
+      allUserSources = await DataSource.findAll(userId);
+    } catch (e) {}
+
     if (dataSourceId) {
-      dataSource = await DataSource.findById(dataSourceId, userId);
+      dataSource = allUserSources.find(ds => String(ds.id || ds._id) === String(dataSourceId)) || await DataSource.findById(dataSourceId, userId);
     } else {
-      // Pick most recently created data source for this user
-      dataSource = await DataSource.findOne(userId);
+      dataSource = allUserSources[0] || await DataSource.findOne(userId);
     }
 
     // Process via Agent Pipeline
     const agentResult = await processUserMessage({
       message: message || 'Please analyze this uploaded image and provide detailed information about it.',
       dataSource,
+      allDataSources: allUserSources,
       history: req.body.history || [],
       mode,
       image

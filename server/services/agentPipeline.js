@@ -59,11 +59,12 @@ When an image is provided, analyze the image thoroughly and explain its contents
 };
 
 /**
+/**
  * Dynamic Schema Entity Verification
  * Verifies if any noun/entity specified in the user's prompt exists in the active dataset's
- * dataset name, table names, or column names.
+ * dataset name, table names, or column names. Also inspects other user datasets if irrelevant.
  */
-const verifySchemaRelevance = (message, dataSource) => {
+const verifySchemaRelevance = (message, dataSource, allDataSources = []) => {
   if (!dataSource || !dataSource.schemaMetadata) return { isRelevant: true };
 
   const prompt = message.toLowerCase().trim();
@@ -81,58 +82,82 @@ const verifySchemaRelevance = (message, dataSource) => {
     return { isRelevant: true };
   }
 
-  const datasetName = (dataSource.name || '').toLowerCase();
-  const tables = dataSource.schemaMetadata.tables || [];
+  const checkSourceRelevance = (ds) => {
+    if (!ds || !ds.schemaMetadata) return false;
+    let meta = ds.schemaMetadata;
+    if (typeof meta === 'string') {
+      try { meta = JSON.parse(meta); } catch (e) { meta = null; }
+    }
+    if (!meta) return false;
 
-  const schemaTokens = new Set();
-  datasetName.replace(/[^a-z0-9_]/g, ' ').split(/\s+/).forEach(tok => {
-    if (tok.length >= 3) schemaTokens.add(tok);
-  });
+    const datasetName = (ds.name || '').toLowerCase();
+    const tables = meta.tables || [];
 
-  for (const t of tables) {
-    const tName = (t.name || '').toLowerCase();
-    tName.replace(/[^a-z0-9_]/g, ' ').split(/\s+/).forEach(tok => {
+    const schemaTokens = new Set();
+    datasetName.replace(/[^a-z0-9_]/g, ' ').split(/\s+/).forEach(tok => {
       if (tok.length >= 3) schemaTokens.add(tok);
     });
 
-    for (const c of t.columns || []) {
-      const cName = (c.name || '').toLowerCase();
-      cName.replace(/[^a-z0-9_]/g, ' ').split(/\s+/).forEach(tok => {
+    for (const t of tables) {
+      const tName = (t.name || '').toLowerCase();
+      tName.replace(/[^a-z0-9_]/g, ' ').split(/\s+/).forEach(tok => {
         if (tok.length >= 3) schemaTokens.add(tok);
       });
-    }
-  }
 
-  let matchFound = false;
-  let unmatchedWord = '';
-
-  for (const word of entityCandidateWords) {
-    const stem = word.replace(/s$/, '');
-    let wordMatches = false;
-    for (const token of schemaTokens) {
-      if (token.includes(word) || token.includes(stem) || word.includes(token) || stem.includes(token)) {
-        wordMatches = true;
-        break;
+      for (const c of t.columns || []) {
+        const cName = typeof c === 'string' ? c.toLowerCase() : ((c.name || '').toLowerCase());
+        cName.replace(/[^a-z0-9_]/g, ' ').split(/\s+/).forEach(tok => {
+          if (tok.length >= 3) schemaTokens.add(tok);
+        });
       }
     }
 
-    if (wordMatches) {
-      matchFound = true;
-      break;
-    } else {
-      unmatchedWord = word;
+    for (const word of entityCandidateWords) {
+      const stem = word.replace(/s$/, '');
+      for (const token of schemaTokens) {
+        if (token.includes(word) || token.includes(stem) || word.includes(token) || stem.includes(token)) {
+          return true;
+        }
+      }
     }
-  }
+    return false;
+  };
 
-  if (!matchFound) {
+  const isCurrentRelevant = checkSourceRelevance(dataSource);
+
+  if (!isCurrentRelevant) {
+    let tables = dataSource.schemaMetadata.tables || [];
+    if (typeof dataSource.schemaMetadata === 'string') {
+      try { tables = JSON.parse(dataSource.schemaMetadata).tables || []; } catch (e) {}
+    }
     const tableSummaryStr = tables.map(t => {
-      const cols = (t.columns || []).map(c => c.name).join(', ');
+      const cols = (t.columns || []).map(c => typeof c === 'string' ? c : (c.name || '')).join(', ');
       return `"${t.name}" [${cols}]`;
     }).join('; ');
 
+    let matchingSource = null;
+    if (Array.isArray(allDataSources) && allDataSources.length > 1) {
+      const currentId = String(dataSource.id || dataSource._id);
+      for (const otherDs of allDataSources) {
+        const otherId = String(otherDs.id || otherDs._id);
+        if (currentId !== otherId) {
+          if (checkSourceRelevance(otherDs)) {
+            matchingSource = {
+              id: otherId,
+              _id: otherDs._id || otherDs.id,
+              name: otherDs.name,
+              type: otherDs.type || 'DATABASE'
+            };
+            break;
+          }
+        }
+      }
+    }
+
     return {
       isRelevant: false,
-      reason: `The question is not related to the connected database (${dataSource.name || 'Dataset'}). The requested entity/concept '${unmatchedWord}' does not exist in this dataset. Available tables and columns: ${tableSummaryStr}`
+      reason: `The question is not related to the connected database (${dataSource.name || 'Dataset'}). The requested entity does not exist in this dataset. Available tables and columns: ${tableSummaryStr}`,
+      matchingDataSource: matchingSource
     };
   }
 
@@ -142,7 +167,7 @@ const verifySchemaRelevance = (message, dataSource) => {
 /**
  * Main Agent Pipeline powered 100% by Google Gemini AI API
  */
-const processUserMessage = async ({ message, dataSource, history = [], mode = 'sql', image = null }) => {
+const processUserMessage = async ({ message, dataSource, allDataSources = [], history = [], mode = 'sql', image = null }) => {
   // 1. General Chat Mode & Multimodal Image Processing
   if (mode === 'general' || image) {
     const reply = await getSmartGeneralReply(message, history, image);
@@ -172,7 +197,7 @@ const processUserMessage = async ({ message, dataSource, history = [], mode = 's
   const dialect = dataSource.type === 'postgres' ? 'postgres' : (dataSource.type === 'mysql' ? 'mysql' : 'sqlite');
 
   // Dynamic Schema Entity Verification
-  const schemaVerification = verifySchemaRelevance(message, dataSource);
+  const schemaVerification = verifySchemaRelevance(message, dataSource, allDataSources);
   if (!schemaVerification.isRelevant) {
     return {
       intent: 'sql_question',
@@ -180,6 +205,7 @@ const processUserMessage = async ({ message, dataSource, history = [], mode = 's
       error: schemaVerification.reason,
       explanation: schemaVerification.reason,
       text: schemaVerification.reason,
+      matchingDataSource: schemaVerification.matchingDataSource || null,
       sql: null,
       data: [],
       fields: []

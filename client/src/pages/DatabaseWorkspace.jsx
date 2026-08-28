@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Download, AlertCircle, Terminal, FileCode2, Sparkles, Trash2, Check, ChevronDown, ChevronUp, X, Columns, HelpCircle } from 'lucide-react';
+import { Download, AlertCircle, Terminal, FileCode2, Sparkles, Trash2, Check, ChevronDown, ChevronUp, X, Columns, HelpCircle, Database, ArrowRight } from 'lucide-react';
 import ResultTable from '../components/ResultTable';
 import ChartRenderer from '../components/ChartRenderer';
 import DatasetColumnsAssistant from '../components/DatasetColumnsAssistant';
@@ -20,6 +20,7 @@ export default function DatabaseWorkspace({
   const [localQuestion, setLocalQuestion] = useState(question || '');
   const [querying, setQuerying] = useState(false);
   const [error, setError] = useState('');
+  const [matchingSuggestion, setMatchingSuggestion] = useState(null);
   const [viewType, setViewType] = useState('Table'); // 'Table' | 'Bar Chart' | 'Line Chart' | 'Pie Chart'
   const [isRecentExpandedMobile, setIsRecentExpandedMobile] = useState(false);
   const [showColumnsDrawer, setShowColumnsDrawer] = useState(true);
@@ -109,17 +110,81 @@ export default function DatabaseWorkspace({
     return sql;
   };
 
-  const executeQueryForText = async (targetText) => {
+  const findMatchingDataSourceLocally = (questionText, dsList, currentDs) => {
+    if (!Array.isArray(dsList) || dsList.length <= 1) return null;
+    const prompt = (questionText || '').toLowerCase().trim();
+    const words = prompt.replace(/[^a-z0-9_\s]/g, '').split(/\s+/);
+    const stopWords = new Set(['give', 'me', 'the', 'show', 'all', 'list', 'get', 'select', 'find', 'display', 'data', 'from', 'table', 'database', 'where', 'and', 'or', 'for', 'with', 'in', 'of', 'to', 'a', 'an', 'is', 'are', 'what', 'which', 'how', 'many', 'count', 'name', 'names']);
+    const keywords = words.filter(w => w.length >= 3 && !stopWords.has(w));
+    if (keywords.length === 0) return null;
+
+    const currentId = currentDs ? String(currentDs.id || currentDs._id) : '';
+
+    for (const ds of dsList) {
+      const dsId = String(ds.id || ds._id);
+      if (dsId === currentId) continue;
+
+      let meta = ds.schemaMetadata;
+      if (typeof meta === 'string') {
+        try { meta = JSON.parse(meta); } catch (e) { meta = null; }
+      }
+      if (!meta || !meta.tables) continue;
+
+      const tokens = new Set();
+      (ds.name || '').toLowerCase().replace(/[^a-z0-9_]/g, ' ').split(/\s+/).forEach(t => { if (t.length >= 3) tokens.add(t); });
+
+      for (const tbl of meta.tables) {
+        (tbl.name || '').toLowerCase().replace(/[^a-z0-9_]/g, ' ').split(/\s+/).forEach(t => { if (t.length >= 3) tokens.add(t); });
+        for (const col of (tbl.columns || [])) {
+          const colName = typeof col === 'string' ? col : (col.name || '');
+          colName.toLowerCase().replace(/[^a-z0-9_]/g, ' ').split(/\s+/).forEach(t => { if (t.length >= 3) tokens.add(t); });
+        }
+      }
+
+      for (const kw of keywords) {
+        const stem = kw.replace(/s$/, '');
+        for (const tok of tokens) {
+          if (tok.includes(kw) || tok.includes(stem) || kw.includes(tok) || stem.includes(tok)) {
+            return {
+              id: dsId,
+              _id: ds._id || ds.id,
+              name: ds.name,
+              type: ds.type || 'DATABASE',
+              fullObject: ds
+            };
+          }
+        }
+      }
+    }
+    return null;
+  };
+
+  const handleSwitchDatabaseAndRun = (targetDs) => {
+    const dsObj = targetDs.fullObject || (Array.isArray(dataSources) ? dataSources.find(ds => String(ds.id || ds._id) === String(targetDs.id || targetDs._id)) : null) || targetDs;
+    if (dsObj && setActiveDataSource) {
+      setActiveDataSource(dsObj);
+      setError('');
+      setMatchingSuggestion(null);
+      setTimeout(() => {
+        executeQueryForText(localQuestion, dsObj);
+      }, 150);
+    }
+  };
+
+  const executeQueryForText = async (targetText, overrideDs = null) => {
     const qToRun = (targetText || localQuestion || '').trim();
     if (!qToRun || querying) return;
 
     setQuerying(true);
     setError('');
+    setMatchingSuggestion(null);
+
+    const activeDs = overrideDs || activeDataSource;
 
     try {
       const res = await sendChatMessage({
         message: qToRun,
-        dataSourceId: activeDataSource ? (activeDataSource._id || activeDataSource.id) : null,
+        dataSourceId: activeDs ? (activeDs._id || activeDs.id) : null,
         mode: 'sql'
       });
 
@@ -127,12 +192,16 @@ export default function DatabaseWorkspace({
 
       if (res.success && agentResult) {
         if (agentResult.isRelevant === false || !agentResult.sql) {
+          const matchingDs = agentResult.matchingDataSource || findMatchingDataSourceLocally(qToRun, dataSources, activeDs);
+          setMatchingSuggestion(matchingDs);
           setError(agentResult.error || agentResult.explanation || agentResult.text || 'The question is not related to the connected database.');
           if (setActiveQuery) setActiveQuery(null);
           return;
         }
 
         if (agentResult.error) {
+          const matchingDs = agentResult.matchingDataSource || findMatchingDataSourceLocally(qToRun, dataSources, activeDs);
+          setMatchingSuggestion(matchingDs);
           setError(agentResult.error);
           if (setActiveQuery) setActiveQuery(null);
           return;
@@ -159,10 +228,14 @@ export default function DatabaseWorkspace({
         if (setRecentQueries) setRecentQueries(prev => [newQueryResult, ...(prev || [])]);
         onAddSession?.(qToRun);
       } else {
+        const matchingDs = findMatchingDataSourceLocally(qToRun, dataSources, activeDs);
+        setMatchingSuggestion(matchingDs);
         setError(res.error || 'Failed to process question via AI Engine.');
         if (setActiveQuery) setActiveQuery(null);
       }
     } catch (err) {
+      const matchingDs = findMatchingDataSourceLocally(qToRun, dataSources, activeDs);
+      setMatchingSuggestion(matchingDs);
       setError(err.response?.data?.error || err.message || 'Error processing query via AI Engine.');
       if (setActiveQuery) setActiveQuery(null);
     } finally {
@@ -362,6 +435,43 @@ export default function DatabaseWorkspace({
           <div className="p-4 bg-rose-950/60 border border-rose-800/80 rounded-xl text-rose-300 text-sm flex items-start sm:items-center gap-2.5 min-w-0 max-w-full overflow-hidden break-words">
             <AlertCircle className="w-5 h-5 shrink-0 text-rose-400 mt-0.5 sm:mt-0" />
             <span className="min-w-0 flex-1 break-words break-all">{error}</span>
+          </div>
+        )}
+
+        {/* Switch Database Recommendation Card */}
+        {matchingSuggestion && (
+          <div className="p-5 bg-[#14161c] border border-amber-500/80 rounded-2xl shadow-2xl space-y-4">
+            <div className="flex items-start space-x-3.5">
+              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400 shrink-0">
+                <Sparkles className="w-5 h-5 text-amber-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-sm font-extrabold text-white">Database Switch Recommended</h4>
+                  <span className="px-2.5 py-0.5 text-[10px] uppercase font-mono font-bold bg-amber-500/20 text-amber-300 rounded-md border border-amber-500/40">
+                    Matching Dataset Found
+                  </span>
+                </div>
+                <p className="text-xs md:text-sm text-zinc-300 mt-1.5 leading-relaxed font-medium">
+                  Your question <span className="text-white font-bold">"{localQuestion}"</span> is not related to <span className="text-amber-400 font-bold">{activeDataSource?.name || 'current database'}</span>, but matching entities were found in your connected dataset <span className="text-emerald-400 font-extrabold">{matchingSuggestion.name}</span>!
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <span className="text-xs text-zinc-400 font-medium">
+                Click below to switch active database and execute this query automatically:
+              </span>
+              <button
+                type="button"
+                onClick={() => handleSwitchDatabaseAndRun(matchingSuggestion)}
+                className="px-5 py-2.5 bg-amber-400 hover:bg-amber-300 text-black font-extrabold text-xs md:text-sm rounded-xl transition shadow-lg flex items-center justify-center space-x-2 shrink-0 cursor-pointer active:scale-95"
+              >
+                <Database className="w-4 h-4 text-black" />
+                <span>Switch to {matchingSuggestion.name} & Run Query</span>
+                <ArrowRight className="w-4 h-4 text-black" />
+              </button>
+            </div>
           </div>
         )}
 
