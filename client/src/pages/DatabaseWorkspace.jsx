@@ -53,29 +53,40 @@ export default function DatabaseWorkspace({
     }, 50);
   };
 
+  const autoRunQuestionRef = useRef('');
+
   const handleSelectQuestion = (qText) => {
-    updateQuestion(qText);
+    setLocalQuestion(qText);
+    if (setQuestion) setQuestion(qText);
     setError('');
     setTimeout(() => {
       if (textareaRef.current) textareaRef.current.focus();
+      executeQueryForText(qText);
     }, 50);
   };
 
-  // Sync local question and activeQuery with props when props change externally
+  // Sync local question with prop when props change externally (e.g. from Dashboard or link click)
   useEffect(() => {
     const nextQ = question || '';
     setLocalQuestion(nextQ);
     if (!nextQ) {
       setError('');
+      autoRunQuestionRef.current = '';
       if (setActiveQuery && activeQuery !== null) {
         setActiveQuery(null);
       }
     }
   }, [question]);
 
-  // Auto-restore activeQuery OR auto-run live query if question prop is passed (e.g. from Dashboard or link)
+  // Auto-restore activeQuery OR auto-run live query ONLY ONCE when navigating from Dashboard or External link
   useEffect(() => {
-    if (question && question.trim() && !activeQuery && !querying && !error) {
+    if (question && question.trim() && question.trim().length >= 3 && !activeQuery && !querying && !error) {
+      if (autoRunQuestionRef.current === question.trim()) {
+        return; // Already auto-executed for this navigation question!
+      }
+
+      autoRunQuestionRef.current = question.trim();
+
       const match = Array.isArray(recentQueries) ? recentQueries.find(q =>
         q.question && q.question.trim().toLowerCase() === question.trim().toLowerCase()
       ) : null;
@@ -90,7 +101,11 @@ export default function DatabaseWorkspace({
 
   const updateQuestion = (val) => {
     setLocalQuestion(val);
-    if (setQuestion) setQuestion(val);
+    if (!val) {
+      setError('');
+      autoRunQuestionRef.current = '';
+      if (setQuestion) setQuestion('');
+    }
   };
 
   // Helper to ensure SQL is displayed cleanly line-by-line
@@ -175,6 +190,12 @@ export default function DatabaseWorkspace({
     const qToRun = (targetText || localQuestion || '').trim();
     if (!qToRun || querying) return;
 
+    if (qToRun.length < 3) {
+      setError('Please enter a complete question (at least 3 characters).');
+      return;
+    }
+
+    if (setQuestion) setQuestion(qToRun);
     setQuerying(true);
     setError('');
     setMatchingSuggestion(null);
