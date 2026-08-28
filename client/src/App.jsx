@@ -426,27 +426,41 @@ export default function App() {
         setWorkspaceQuestion(targetQuestion);
       }
 
-      if (data.sql || (data.rows && data.rows.length > 0) || (data.data && data.data.length > 0)) {
+      // Find cached query in recentQueries that has valid non-empty rows
+      const cachedMatch = Array.isArray(workspaceRecentQueries) ? workspaceRecentQueries.find(q =>
+        (q.question && targetQuestion && q.question.trim().toLowerCase() === targetQuestion.trim().toLowerCase()) ||
+        (q.sql && data.sql && q.sql.trim().toLowerCase() === data.sql.trim().toLowerCase())
+      ) : null;
+
+      if (cachedMatch && Array.isArray(cachedMatch.rows) && cachedMatch.rows.length > 0) {
+        setWorkspaceActiveQuery(cachedMatch);
+      } else if (Array.isArray(data.rows) && data.rows.length > 0) {
         const activeObj = {
           id: data.id || data._id || 'q_' + Date.now(),
           question: targetQuestion || data.question || 'Database query',
           sql: data.sql || '',
           explanation: data.explanation || '',
-          columns: data.columns || data.fields || (data.rows && data.rows.length > 0 ? Object.keys(data.rows[0]) : []),
-          rows: data.rows || data.data || [],
-          rowCount: data.rowCount !== undefined ? data.rowCount : (data.rows ? data.rows.length : (data.data ? data.data.length : 0)),
+          columns: data.columns || data.fields || Object.keys(data.rows[0]),
+          rows: data.rows,
+          rowCount: data.rows.length,
+          executionTimeMs: data.executionTimeMs || 180
+        };
+        setWorkspaceActiveQuery(activeObj);
+      } else if (Array.isArray(data.data) && data.data.length > 0) {
+        const activeObj = {
+          id: data.id || data._id || 'q_' + Date.now(),
+          question: targetQuestion || data.question || 'Database query',
+          sql: data.sql || '',
+          explanation: data.explanation || '',
+          columns: data.columns || data.fields || Object.keys(data.data[0]),
+          rows: data.data,
+          rowCount: data.data.length,
           executionTimeMs: data.executionTimeMs || 180
         };
         setWorkspaceActiveQuery(activeObj);
       } else {
-        const match = workspaceRecentQueries.find(q =>
-          q.question && targetQuestion && q.question.trim().toLowerCase() === targetQuestion.trim().toLowerCase()
-        );
-        if (match) {
-          setWorkspaceActiveQuery(match);
-        } else if (targetQuestion) {
-          setWorkspaceActiveQuery(null);
-        }
+        // No pre-cached rows: set activeQuery to null so DatabaseWorkspace auto-executes and populates live rows!
+        setWorkspaceActiveQuery(null);
       }
     }
   };

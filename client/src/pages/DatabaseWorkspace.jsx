@@ -72,17 +72,20 @@ export default function DatabaseWorkspace({
     }
   }, [question]);
 
-  // Auto-restore activeQuery from recentQueries ONLY if question prop is set but activeQuery is null
+  // Auto-restore activeQuery OR auto-run live query if question prop is passed (e.g. from Dashboard or link)
   useEffect(() => {
-    if (!activeQuery && question && question.trim() && Array.isArray(recentQueries) && recentQueries.length > 0) {
-      const match = recentQueries.find(q =>
+    if (question && question.trim() && !activeQuery && !querying && !error) {
+      const match = Array.isArray(recentQueries) ? recentQueries.find(q =>
         q.question && q.question.trim().toLowerCase() === question.trim().toLowerCase()
-      );
-      if (match && setActiveQuery) {
+      ) : null;
+
+      if (match && Array.isArray(match.rows) && match.rows.length > 0 && setActiveQuery) {
         setActiveQuery(match);
+      } else {
+        executeQueryForText(question);
       }
     }
-  }, [question, activeQuery, recentQueries, setActiveQuery]);
+  }, [question, activeQuery]);
 
   const updateQuestion = (val) => {
     setLocalQuestion(val);
@@ -106,16 +109,16 @@ export default function DatabaseWorkspace({
     return sql;
   };
 
-  const handleAsk = async (e) => {
-    e?.preventDefault();
-    if (!localQuestion.trim() || querying) return;
+  const executeQueryForText = async (targetText) => {
+    const qToRun = (targetText || localQuestion || '').trim();
+    if (!qToRun || querying) return;
 
     setQuerying(true);
     setError('');
 
     try {
       const res = await sendChatMessage({
-        message: localQuestion,
+        message: qToRun,
         dataSourceId: activeDataSource ? (activeDataSource._id || activeDataSource.id) : null,
         mode: 'sql'
       });
@@ -143,7 +146,7 @@ export default function DatabaseWorkspace({
 
         const newQueryResult = {
           id: 'q_' + Date.now(),
-          question: localQuestion,
+          question: qToRun,
           sql: formattedSql,
           rowCount: agentResult.rowCount !== undefined ? agentResult.rowCount : rowsData.length,
           executionTimeMs: agentResult.executionTimeMs || 180,
@@ -154,7 +157,7 @@ export default function DatabaseWorkspace({
 
         if (setActiveQuery) setActiveQuery(newQueryResult);
         if (setRecentQueries) setRecentQueries(prev => [newQueryResult, ...(prev || [])]);
-        onAddSession?.(localQuestion);
+        onAddSession?.(qToRun);
       } else {
         setError(res.error || 'Failed to process question via AI Engine.');
         if (setActiveQuery) setActiveQuery(null);
@@ -165,6 +168,11 @@ export default function DatabaseWorkspace({
     } finally {
       setQuerying(false);
     }
+  };
+
+  const handleAsk = (e) => {
+    e?.preventDefault();
+    executeQueryForText(localQuestion);
   };
 
   const handleSelectRecent = (item) => {
