@@ -322,11 +322,11 @@ export default function DatabaseWorkspace({
                   onClick={() => setShowColumnsDrawer(!showColumnsDrawer)}
                   className={`px-4 py-2.5 rounded-xl border text-sm font-bold transition cursor-pointer flex items-center space-x-1.5 ${
                     showColumnsDrawer
-                      ? 'bg-indigo-950/80 border-indigo-500/80 text-indigo-200'
-                      : 'bg-[#121419] hover:bg-slate-800 border-slate-700/80 text-slate-300 hover:text-white'
+                      ? 'bg-zinc-800 border-zinc-600 text-white'
+                      : 'bg-[#121419] hover:bg-zinc-800 border-zinc-700/80 text-zinc-300 hover:text-white'
                   }`}
                 >
-                  <Columns className="w-4 h-4 text-indigo-400" />
+                  <Columns className="w-4 h-4 text-zinc-300" />
                   <span>{showColumnsDrawer ? 'Hide Columns & Suggestions' : 'View Columns & Suggestions'}</span>
                 </button>
 

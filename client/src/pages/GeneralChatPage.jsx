@@ -32,34 +32,78 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
     ]);
   };
 
-  const handleFileSelect = (e) => {
+  const compressImageFile = (file, maxWidth = 1280, quality = 0.85) => {
+    return new Promise((resolve) => {
+      if (!file.type || !file.type.startsWith('image/')) {
+        resolve(null);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new window.Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+          const pureBase64 = compressedDataUrl.split(',')[1] || '';
+          resolve({
+            preview: compressedDataUrl,
+            data: pureBase64,
+            mimeType: 'image/jpeg'
+          });
+        };
+        img.onerror = () => {
+          const rawBase64 = e.target.result;
+          resolve({
+            preview: rawBase64,
+            data: rawBase64.split(',')[1] || '',
+            mimeType: file.type || 'image/jpeg'
+          });
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFileSelect = async (e) => {
     const selectedFile = e.target.files[0];
     if (selectedFile) {
       if (selectedFile.type && selectedFile.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const base64Url = event.target.result;
-          const pureBase64 = base64Url.split(',')[1] || '';
+        const compressed = await compressImageFile(selectedFile);
+        if (compressed) {
           setAttachedImage({
             file: selectedFile,
             name: selectedFile.name,
             type: selectedFile.type,
-            preview: base64Url,
-            data: pureBase64,
-            mimeType: selectedFile.type
+            preview: compressed.preview,
+            data: compressed.data,
+            mimeType: compressed.mimeType
           });
-        };
-        reader.readAsDataURL(selectedFile);
-      } else {
-        setAttachedImage({
-          file: selectedFile,
-          name: selectedFile.name,
-          type: selectedFile.type || 'file',
-          preview: null,
-          data: null,
-          mimeType: selectedFile.type || ''
-        });
+          return;
+        }
       }
+      setAttachedImage({
+        file: selectedFile,
+        name: selectedFile.name,
+        type: selectedFile.type || 'file',
+        preview: null,
+        data: null,
+        mimeType: selectedFile.type || ''
+      });
     }
   };
 
@@ -178,7 +222,7 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
           </div>
           <div className="min-w-0">
             <h2 className="text-lg md:text-2xl font-extrabold text-white tracking-tight truncate">General AI Chatbot</h2>
-            <p className="text-xs md:text-base text-indigo-400 font-semibold truncate">Ask SQL questions, syntax help, and database advice</p>
+            <p className="text-xs md:text-base text-zinc-400 font-semibold truncate">Ask SQL questions, syntax help, database advice, and analyze images</p>
           </div>
         </div>
 
@@ -261,9 +305,9 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
             <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-[#222226] border border-[#383842] flex items-center justify-center text-white shrink-0 shadow-md">
               <Bot className="w-4 h-4 md:w-5 md:h-5 text-white animate-pulse" />
             </div>
-            <div className="px-4 py-2.5 md:px-5 md:py-3.5 bg-[#222226] border border-[#2e2e36] rounded-2xl text-xs md:text-sm font-semibold text-indigo-400 flex items-center space-x-2">
-              <Sparkles className="w-4 h-4 animate-spin text-indigo-400" />
-              <span>DataMind AI is thinking...</span>
+            <div className="px-4 py-2.5 md:px-5 md:py-3.5 bg-[#222226] border border-[#2e2e36] rounded-2xl text-xs md:text-sm font-semibold text-amber-400 flex items-center space-x-2">
+              <Sparkles className="w-4 h-4 animate-spin text-amber-400" />
+              <span>DataMind AI is analyzing your prompt...</span>
             </div>
           </div>
         )}
@@ -282,11 +326,11 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
                   className="w-10 h-10 rounded-lg object-cover border border-[#48485a]"
                 />
               ) : (
-                <Image className="w-5 h-5 text-indigo-400 ml-1" />
+                <Image className="w-5 h-5 text-amber-400 ml-1" />
               )}
               <div className="flex flex-col min-w-0 pr-1">
                 <span className="text-xs font-semibold text-zinc-200 truncate max-w-xs">{attachedImage.name}</span>
-                <span className="text-[10px] text-indigo-400 font-mono">
+                <span className="text-[10px] text-amber-400 font-mono">
                   {attachedImage.preview ? 'Image Ready for AI Analysis' : 'File attached'}
                 </span>
               </div>
