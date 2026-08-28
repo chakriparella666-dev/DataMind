@@ -122,20 +122,12 @@ export default function DatasetColumnsAssistant({
   if (!activeDataSource) return null;
 
   return (
-    <div className={`rounded-2xl border transition-all duration-200 shadow-2xl overflow-hidden ${
-      isNotRelated 
-        ? 'bg-[#14161c] border-amber-500/60 shadow-amber-950/20' 
-        : 'bg-[#14161c] border-zinc-800'
-    }`}>
+    <div className="bg-[#14161c] border border-zinc-800 rounded-2xl transition-all duration-200 shadow-2xl overflow-hidden">
       {/* Header Bar */}
       <div className="p-4 md:p-5 border-b border-zinc-800 bg-[#0f1115] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-start space-x-3 min-w-0">
-          <div className={`p-2.5 rounded-xl shrink-0 ${
-            isNotRelated 
-              ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' 
-              : 'bg-zinc-800/90 text-zinc-200 border border-zinc-700/80'
-          }`}>
-            {tables.length > 1 ? <Layers className="w-5 h-5" /> : <FileSpreadsheet className="w-5 h-5" />}
+          <div className="p-2.5 rounded-xl shrink-0 bg-zinc-800/90 text-zinc-200 border border-zinc-700/80">
+            {tables.length > 1 ? <Layers className="w-5 h-5 text-white" /> : <FileSpreadsheet className="w-5 h-5 text-white" />}
           </div>
           <div className="min-w-0">
             <h3 className="text-sm font-bold text-white flex items-center gap-2 truncate">
@@ -212,9 +204,9 @@ export default function DatasetColumnsAssistant({
           <div className="bg-[#0f1115] border border-zinc-800 rounded-xl p-4 space-y-3">
             <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
               <div className="flex items-center space-x-2">
-                <Table className="w-4 h-4 text-amber-400" />
+                <Table className="w-4 h-4 text-zinc-300" />
                 <h4 className="text-xs font-black tracking-wide uppercase text-zinc-200">
-                  SHEET: <span className="text-amber-400 font-bold">{currentSheetName}</span>
+                  SHEET: <span className="text-white font-bold">{currentSheetName}</span>
                 </h4>
                 <span className="text-xs text-zinc-400 font-medium">
                   ({currentTable?.columns?.length || 0} Columns Available)
@@ -245,7 +237,7 @@ export default function DatasetColumnsAssistant({
                           : 'bg-[#181a20] hover:bg-zinc-800 border-zinc-700/80 hover:border-zinc-500 text-zinc-200 hover:text-white shadow-sm'
                       }`}
                     >
-                      <Columns className={`w-3.5 h-3.5 ${isJustAdded ? 'text-white' : 'text-zinc-400 group-hover:text-amber-400'}`} />
+                      <Columns className={`w-3.5 h-3.5 ${isJustAdded ? 'text-white' : 'text-zinc-400 group-hover:text-white'}`} />
                       <span className="font-medium">{colName}</span>
                       {colType && (
                         <span className="text-[9px] px-1.5 py-0.5 uppercase rounded bg-[#0f1115] text-zinc-400 font-mono group-hover:bg-zinc-700 group-hover:text-zinc-200 border border-zinc-800">
@@ -262,11 +254,11 @@ export default function DatasetColumnsAssistant({
             )}
           </div>
 
-          {/* Suggested Questions Section (Keeps Yellow Highlights) */}
+          {/* Suggested Questions Section */}
           <div className="bg-[#0f1115] border border-zinc-800 rounded-xl p-4 space-y-3">
             <div className="flex items-center space-x-2 text-xs font-bold text-zinc-200">
-              <Sparkles className="w-4 h-4 text-amber-400" />
-              <span>Suggested questions for sheet <span className="text-amber-400 font-bold">{currentSheetName}</span>:</span>
+              <Sparkles className="w-4 h-4 text-zinc-300" />
+              <span>Suggested questions for sheet <span className="text-white font-bold">{currentSheetName}</span>:</span>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -275,9 +267,9 @@ export default function DatasetColumnsAssistant({
                   key={qIdx}
                   type="button"
                   onClick={() => onSelectQuestion?.(q)}
-                  className="text-left text-xs bg-[#181a20] hover:bg-zinc-800 border border-zinc-700/80 hover:border-amber-500/60 text-zinc-200 hover:text-white px-3.5 py-2.5 rounded-xl transition duration-150 cursor-pointer font-medium flex items-center space-x-2 group active:scale-[0.99]"
+                  className="text-left text-xs bg-[#181a20] hover:bg-zinc-800 border border-zinc-700/80 hover:border-zinc-500 text-zinc-200 hover:text-white px-3.5 py-2.5 rounded-xl transition duration-150 cursor-pointer font-medium flex items-center space-x-2 group active:scale-[0.99]"
                 >
-                  <ChevronRight className="w-3.5 h-3.5 text-amber-400/80 group-hover:text-amber-400 shrink-0" />
+                  <ChevronRight className="w-3.5 h-3.5 text-zinc-400 group-hover:text-white shrink-0" />
                   <span>{q}</span>
                 </button>
               ))}

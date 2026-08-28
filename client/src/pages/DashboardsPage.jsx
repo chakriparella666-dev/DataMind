@@ -193,8 +193,8 @@ export default function DashboardsPage({ onNavigate }) {
                       >
                         <div className="space-y-2.5">
                           <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-start space-x-2 text-amber-400 font-bold text-sm min-w-0 flex-1">
-                              <LayoutDashboard className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                            <div className="flex items-start space-x-2 text-zinc-300 font-bold text-sm min-w-0 flex-1">
+                              <LayoutDashboard className="w-4 h-4 shrink-0 mt-0.5 text-zinc-300" />
                               <span className="text-white text-sm md:text-base font-bold leading-snug break-words" title={fullQuestionText}>
                                 {fullQuestionText}
                               </span>

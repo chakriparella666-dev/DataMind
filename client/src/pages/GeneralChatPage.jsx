@@ -305,8 +305,8 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
             <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-[#222226] border border-[#383842] flex items-center justify-center text-white shrink-0 shadow-md">
               <Bot className="w-4 h-4 md:w-5 md:h-5 text-white animate-pulse" />
             </div>
-            <div className="px-4 py-2.5 md:px-5 md:py-3.5 bg-[#222226] border border-[#2e2e36] rounded-2xl text-xs md:text-sm font-semibold text-amber-400 flex items-center space-x-2">
-              <Sparkles className="w-4 h-4 animate-spin text-amber-400" />
+            <div className="px-4 py-2.5 md:px-5 md:py-3.5 bg-[#222226] border border-[#2e2e36] rounded-2xl text-xs md:text-sm font-semibold text-zinc-300 flex items-center space-x-2">
+              <Sparkles className="w-4 h-4 animate-spin text-white" />
               <span>DataMind AI is analyzing your prompt...</span>
             </div>
           </div>
@@ -326,11 +326,11 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
                   className="w-10 h-10 rounded-lg object-cover border border-[#48485a]"
                 />
               ) : (
-                <Image className="w-5 h-5 text-amber-400 ml-1" />
+                <Image className="w-5 h-5 text-white ml-1" />
               )}
               <div className="flex flex-col min-w-0 pr-1">
                 <span className="text-xs font-semibold text-zinc-200 truncate max-w-xs">{attachedImage.name}</span>
-                <span className="text-[10px] text-amber-400 font-mono">
+                <span className="text-[10px] text-zinc-400 font-mono">
                   {attachedImage.preview ? 'Image Ready for AI Analysis' : 'File attached'}
                 </span>
               </div>
