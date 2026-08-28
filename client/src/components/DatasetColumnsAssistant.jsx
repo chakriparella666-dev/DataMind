@@ -122,18 +122,26 @@ export default function DatasetColumnsAssistant({
   if (!activeDataSource) return null;
 
   return (
-    <div className="bg-[#14161c] border border-zinc-800 rounded-2xl transition-all duration-200 shadow-2xl overflow-hidden">
+    <div className={`rounded-2xl border transition-all duration-200 shadow-2xl overflow-hidden ${
+      isNotRelated 
+        ? 'bg-[#14161c] border-rose-900/60 shadow-rose-950/20' 
+        : 'bg-[#14161c] border-zinc-800'
+    }`}>
       {/* Header Bar */}
       <div className="p-4 md:p-5 border-b border-zinc-800 bg-[#0f1115] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-start space-x-3 min-w-0">
-          <div className="p-2.5 rounded-xl shrink-0 bg-zinc-800/90 text-zinc-200 border border-zinc-700/80">
-            {tables.length > 1 ? <Layers className="w-5 h-5 text-white" /> : <FileSpreadsheet className="w-5 h-5 text-white" />}
+          <div className={`p-2.5 rounded-xl shrink-0 ${
+            isNotRelated 
+              ? 'bg-rose-950/80 text-rose-400 border border-rose-800/80' 
+              : 'bg-indigo-950/80 text-indigo-400 border border-indigo-800/60'
+          }`}>
+            {tables.length > 1 ? <Layers className="w-5 h-5" /> : <FileSpreadsheet className="w-5 h-5" />}
           </div>
           <div className="min-w-0">
             <h3 className="text-sm font-bold text-white flex items-center gap-2 truncate">
               <span>{title || (isNotRelated ? "Query Not Related to Database — Available Dataset Schema" : "Dataset Columns & Sheet Assistant")}</span>
               {tables.length > 1 && (
-                <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-md bg-zinc-800 text-zinc-200 border border-zinc-700">
+                <span className="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider rounded-md bg-indigo-950 text-indigo-300 border border-indigo-800/80">
                   {tables.length} Sheets
                 </span>
               )}
@@ -160,7 +168,7 @@ export default function DatasetColumnsAssistant({
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs text-zinc-400 font-medium">
                 <span className="flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-zinc-400" />
+                  <Layers className="w-3.5 h-3.5 text-indigo-400" />
                   <span>Select Sheet to view columns (Total {tables.length} sheets in {activeDataSource.name}):</span>
                 </span>
                 <span className="text-[11px] text-zinc-300 font-semibold">
@@ -204,15 +212,15 @@ export default function DatasetColumnsAssistant({
           <div className="bg-[#0f1115] border border-zinc-800 rounded-xl p-4 space-y-3">
             <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
               <div className="flex items-center space-x-2">
-                <Table className="w-4 h-4 text-zinc-300" />
+                <Table className="w-4 h-4 text-indigo-400" />
                 <h4 className="text-xs font-black tracking-wide uppercase text-zinc-200">
-                  SHEET: <span className="text-white font-bold">{currentSheetName}</span>
+                  SHEET: <span className="text-cyan-300 font-bold">{currentSheetName}</span>
                 </h4>
                 <span className="text-xs text-zinc-400 font-medium">
                   ({currentTable?.columns?.length || 0} Columns Available)
                 </span>
               </div>
-              <span className="text-[11px] text-zinc-400 hidden sm:inline-block">
+              <span className="text-[11px] text-cyan-400 font-semibold hidden sm:inline-block">
                 ⚡ Click column to insert text
               </span>
             </div>
@@ -234,13 +242,13 @@ export default function DatasetColumnsAssistant({
                       className={`group px-3.5 py-2 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center space-x-2 border active:scale-95 ${
                         isJustAdded
                           ? 'bg-emerald-600 border-emerald-400 text-white ring-2 ring-emerald-400/50'
-                          : 'bg-[#181a20] hover:bg-zinc-800 border-zinc-700/80 hover:border-zinc-500 text-zinc-200 hover:text-white shadow-sm'
+                          : 'bg-[#181a20] hover:bg-zinc-800 border-zinc-700/80 hover:border-cyan-500/60 text-zinc-200 hover:text-white shadow-sm'
                       }`}
                     >
-                      <Columns className={`w-3.5 h-3.5 ${isJustAdded ? 'text-white' : 'text-zinc-400 group-hover:text-white'}`} />
+                      <Columns className={`w-3.5 h-3.5 ${isJustAdded ? 'text-white' : 'text-indigo-400 group-hover:text-cyan-300'}`} />
                       <span className="font-medium">{colName}</span>
                       {colType && (
-                        <span className="text-[9px] px-1.5 py-0.5 uppercase rounded bg-[#0f1115] text-zinc-400 font-mono group-hover:bg-zinc-700 group-hover:text-zinc-200 border border-zinc-800">
+                        <span className="text-[9px] px-1.5 py-0.5 uppercase rounded bg-indigo-950/80 text-indigo-300 font-mono group-hover:bg-cyan-950 group-hover:text-cyan-200 border border-indigo-800/60">
                           {colType}
                         </span>
                       )}
@@ -257,8 +265,8 @@ export default function DatasetColumnsAssistant({
           {/* Suggested Questions Section */}
           <div className="bg-[#0f1115] border border-zinc-800 rounded-xl p-4 space-y-3">
             <div className="flex items-center space-x-2 text-xs font-bold text-zinc-200">
-              <Sparkles className="w-4 h-4 text-zinc-300" />
-              <span>Suggested questions for sheet <span className="text-white font-bold">{currentSheetName}</span>:</span>
+              <Sparkles className="w-4 h-4 text-emerald-400" />
+              <span>Suggested questions for sheet <span className="text-emerald-400 font-bold">{currentSheetName}</span>:</span>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -267,9 +275,9 @@ export default function DatasetColumnsAssistant({
                   key={qIdx}
                   type="button"
                   onClick={() => onSelectQuestion?.(q)}
-                  className="text-left text-xs bg-[#181a20] hover:bg-zinc-800 border border-zinc-700/80 hover:border-zinc-500 text-zinc-200 hover:text-white px-3.5 py-2.5 rounded-xl transition duration-150 cursor-pointer font-medium flex items-center space-x-2 group active:scale-[0.99]"
+                  className="text-left text-xs bg-[#181a20] hover:bg-zinc-800 border border-zinc-700/80 hover:border-emerald-500/60 text-zinc-200 hover:text-white px-3.5 py-2.5 rounded-xl transition duration-150 cursor-pointer font-medium flex items-center space-x-2 group active:scale-[0.99]"
                 >
-                  <ChevronRight className="w-3.5 h-3.5 text-zinc-400 group-hover:text-white shrink-0" />
+                  <ChevronRight className="w-3.5 h-3.5 text-emerald-400/80 group-hover:text-emerald-400 shrink-0" />
                   <span>{q}</span>
                 </button>
               ))}
