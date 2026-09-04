@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Eye, Edit2, Trash2, ArrowLeft, AlertCircle, LayoutDashboard, CheckCircle2 } from 'lucide-react';
+import { Plus, Eye, Edit2, Trash2, ArrowLeft, AlertCircle, LayoutDashboard, CheckCircle2, Sparkles } from 'lucide-react';
 import { getDashboards, createDashboard, deleteDashboard, getDataSources } from '../services/api';
+import PowerBIExportModal from '../components/PowerBIExportModal';
 
 export default function DashboardsPage({ onNavigate }) {
   const [dashboards, setDashboards] = useState([]);
@@ -10,6 +11,7 @@ export default function DashboardsPage({ onNavigate }) {
   const [successMsg, setSuccessMsg] = useState(null);
   const [isAdding, setIsAdding] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [powerBiDash, setPowerBiDash] = useState(null);
 
   const [form, setForm] = useState({
     name: '',
@@ -214,6 +216,14 @@ export default function DashboardsPage({ onNavigate }) {
                         </span>
                         <div className="flex items-center space-x-2">
                           <button
+                            onClick={() => setPowerBiDash(dash)}
+                            className="px-2.5 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold rounded-lg transition cursor-pointer flex items-center gap-1"
+                            title="Export to Power BI"
+                          >
+                            <Sparkles className="w-3 h-3 text-amber-400" />
+                            <span>Power BI</span>
+                          </button>
+                          <button
                             onClick={() => onNavigate?.('workspace', dash)}
                             className="px-3 py-1.5 bg-[#5850ec] hover:bg-[#4f46e5] text-white text-xs font-bold rounded-lg transition cursor-pointer"
                           >
@@ -233,6 +243,17 @@ export default function DashboardsPage({ onNavigate }) {
                 </div>
               )}
             </div>
+
+            {/* Power BI Export Modal for Selected Dashboard */}
+            <PowerBIExportModal
+              isOpen={Boolean(powerBiDash)}
+              onClose={() => setPowerBiDash(null)}
+              question={powerBiDash?.name || powerBiDash?.question || 'Dashboard SQL Dataset'}
+              sql={powerBiDash?.sql || 'SELECT * FROM analytics_table;'}
+              data={[]}
+              fields={[]}
+              dataSourceId={powerBiDash?.dataSourceId}
+            />
           </>
         ) : (
           /* INLINE Add Dashboard Form View (No Popup Modal!) */

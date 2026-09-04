@@ -12,6 +12,7 @@ const trainingRouter = require('./routes/training');
 const authRouter = require('./routes/auth');
 const statsRouter = require('./routes/stats');
 const dashboardsRouter = require('./routes/dashboards');
+const powerbiRouter = require('./routes/powerbi');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -30,6 +31,7 @@ app.use('/api/agent', agentRouter);
 app.use('/api/training', trainingRouter);
 app.use('/api/stats', statsRouter);
 app.use('/api/dashboards', dashboardsRouter);
+app.use('/api/powerbi', powerbiRouter);
 
 // Healthcheck
 app.get('/api/health', (req, res) => {

@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
-import { Download, ThumbsUp, Table, ChevronLeft, ChevronRight, Check } from 'lucide-react';
+import { Download, ThumbsUp, Table, ChevronLeft, ChevronRight, Check, Share2, Sparkles } from 'lucide-react';
 import { saveQAPair } from '../services/api';
+import PowerBIExportModal from './PowerBIExportModal';
 
 export default function ResultTable({ data = [], fields = [], question, sql, dataSourceId }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(10);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showPowerBiModal, setShowPowerBiModal] = useState(false);
 
   if (!data || data.length === 0) return null;
 
@@ -71,7 +73,18 @@ export default function ResultTable({ data = [], fields = [], question, sql, dat
           </span>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2.5">
+          {/* Automated Power BI Integration Button */}
+          <button
+            onClick={() => setShowPowerBiModal(true)}
+            className="text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold px-3.5 py-2 rounded-xl flex items-center space-x-2 shrink-0 cursor-pointer shadow-sm transition active:scale-[0.98]"
+            title="Export & Automate Power BI Dashboard Dataset"
+          >
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span>Power BI Dashboard</span>
+          </button>
+
           {/* Save to Training Data Button */}
           {question && sql && (
             <button
@@ -107,6 +120,17 @@ export default function ResultTable({ data = [], fields = [], question, sql, dat
           </button>
         </div>
       </div>
+
+      {/* Automated Power BI Integration Modal */}
+      <PowerBIExportModal
+        isOpen={showPowerBiModal}
+        onClose={() => setShowPowerBiModal(false)}
+        question={question}
+        sql={sql}
+        data={data}
+        fields={colKeys}
+        dataSourceId={dataSourceId}
+      />
 
       {/* Table Grid */}
       <div className="overflow-x-auto">

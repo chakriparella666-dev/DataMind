@@ -134,3 +134,19 @@ export const getSystemStats = async () => {
   const res = await axios.get(`${API_BASE}/stats/overview`);
   return res.data;
 };
+
+// Power BI Integration API Calls
+export const generatePowerBiPbids = async (payload) => {
+  const res = await axios.post(`${API_BASE}/powerbi/pbids`, payload);
+  return res.data;
+};
+
+export const getPowerBiMQuery = async (payload) => {
+  const res = await axios.post(`${API_BASE}/powerbi/m-query`, payload);
+  return res.data;
+};
+
+export const pushPowerBiDataset = async (payload) => {
+  const res = await axios.post(`${API_BASE}/powerbi/push-dataset`, payload);
+  return res.data;
+};
