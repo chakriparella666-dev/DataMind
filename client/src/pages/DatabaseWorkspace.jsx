@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Download, AlertCircle, Terminal, FileCode2, Sparkles, Trash2, Check, ChevronDown, ChevronUp, X, Columns, HelpCircle, Database, ArrowRight } from 'lucide-react';
 import ResultTable from '../components/ResultTable';
 import ChartRenderer from '../components/ChartRenderer';
+import PowerBIDashboard from '../components/PowerBIDashboard';
 import DatasetColumnsAssistant from '../components/DatasetColumnsAssistant';
 import { sendChatMessage, deleteChatSession, getDashboards, createDashboard, updateDashboard } from '../services/api';
 
@@ -558,6 +559,7 @@ export default function DatabaseWorkspace({
                     className="px-4 py-2 border border-slate-700/80 bg-[#121419] text-slate-200 text-sm font-semibold rounded-xl focus:outline-none transition cursor-pointer"
                   >
                     <option value="Table">Table</option>
+                    <option value="Power BI Dashboard">⚡ Power BI Dashboard</option>
                     <option value="Bar Chart">Bar Chart</option>
                     <option value="Line Chart">Line Chart</option>
                     <option value="Pie Chart">Pie Chart</option>
@@ -585,10 +587,18 @@ export default function DatabaseWorkspace({
               </div>
             </div>
 
-            {/* Results Render Card (Table or Chart) */}
+            {/* Results Render Card (Table, Automated Power BI Dashboard, or Chart) */}
             <div className="bg-[#181a20] border border-slate-800/90 rounded-2xl p-6 shadow-xl">
               {viewType === 'Table' ? (
                 <ResultTable
+                  data={activeQuery.rows}
+                  fields={activeQuery.columns}
+                  question={activeQuery.question}
+                  sql={activeQuery.sql}
+                  dataSourceId={activeDataSource?._id}
+                />
+              ) : viewType === 'Power BI Dashboard' ? (
+                <PowerBIDashboard
                   data={activeQuery.rows}
                   fields={activeQuery.columns}
                   question={activeQuery.question}

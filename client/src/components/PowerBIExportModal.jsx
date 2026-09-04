@@ -27,16 +27,25 @@ export default function PowerBIExportModal({ isOpen, onClose, question, sql, dat
   const fetchPowerBiPayloads = async () => {
     setLoading(true);
     try {
-      const [mRes, pushRes] = await Promise.all([
+      const results = await Promise.allSettled([
         getPowerBiMQuery({ question, sql, data, fields, host: dbHost, port: dbPort, database: dbName }),
         pushPowerBiDataset({ datasetName: `DataMind_${question ? question.substring(0, 20).replace(/[^a-zA-Z0-9]/g, '') : 'Query'}`, question, data, fields })
       ]);
 
-      if (mRes.success) {
+      if (results[0].status === 'fulfilled' && results[0].value?.success) {
+        const mRes = results[0].value;
         setMQueryRes({ direct: mRes.mScriptDirect, web: mRes.mScriptWeb });
+      } else {
+        // Fallback default M scripts if backend fails
+        const cleanSql = sql ? sql.trim().replace(/"/g, '""') : 'SELECT * FROM analytics_table';
+        setMQueryRes({
+          direct: `let\n    Source = PostgreSQL.Database("${dbHost}:${dbPort}", "${dbName}", [Query="${cleanSql}"])\nin\n    Source`,
+          web: `let\n    Source = Csv.Document(Web.Contents("http://localhost:5000/api/powerbi/export-csv"))\nin\n    Source`
+        });
       }
-      if (pushRes.success) {
-        setPushSchemaRes(pushRes);
+
+      if (results[1].status === 'fulfilled' && results[1].value?.success) {
+        setPushSchemaRes(results[1].value);
       }
     } catch (err) {
       console.error('Error loading Power BI export definitions:', err);
@@ -47,17 +56,17 @@ export default function PowerBIExportModal({ isOpen, onClose, question, sql, dat
 
   if (!isOpen) return null;
 
-  // Handler 1: Download .pbids File
-  const handleDownloadPbids = async () => {
+  // Handler 1: Download .pbids File (PostgreSQL or Web)
+  const handleDownloadPbids = async (type = 'postgresql') => {
     try {
-      const res = await generatePowerBiPbids({ question, sql, dataSourceId, dbName, host: dbHost, port: dbPort });
+      const res = await generatePowerBiPbids({ question, sql, type, dataSourceId, dbName, host: dbHost, port: dbPort });
       if (res.success && res.pbids) {
         const jsonStr = JSON.stringify(res.pbids, null, 2);
         const blob = new Blob([jsonStr], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = res.filename || `datamind_query_${Date.now()}.pbids`;
+        a.download = res.filename || `datamind_query_${type}_${Date.now()}.pbids`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -244,21 +253,29 @@ export default function PowerBIExportModal({ isOpen, onClose, question, sql, dat
                   </div>
                 </div>
 
-                <div className="pt-2 flex items-center space-x-3">
+                <div className="pt-2 flex flex-col sm:flex-row items-center gap-3">
                   <button
-                    onClick={handleDownloadPbids}
-                    className="flex-1 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs py-3 px-4 rounded-xl flex items-center justify-center space-x-2 transition cursor-pointer shadow-lg shadow-amber-500/10"
+                    onClick={() => handleDownloadPbids('postgresql')}
+                    className="flex-1 w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs py-3 px-4 rounded-xl flex items-center justify-center space-x-2 transition cursor-pointer shadow-lg shadow-amber-500/10"
                   >
                     <Download className="w-4 h-4" />
-                    <span>Download .PBIDS File for Power BI</span>
+                    <span>PostgreSQL PBIDS File</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleDownloadPbids('web')}
+                    className="flex-1 w-full bg-[#1e2230] hover:bg-slate-800 border border-slate-700/80 text-amber-300 font-bold text-xs py-3 px-4 rounded-xl flex items-center justify-center space-x-2 transition cursor-pointer"
+                  >
+                    <Globe className="w-4 h-4 text-amber-400" />
+                    <span>Web Feed PBIDS File</span>
                   </button>
 
                   <button
                     onClick={handleDownloadPowerBiCsv}
-                    className="flex-1 bg-[#1e2230] hover:bg-slate-800 border border-slate-700/80 text-slate-200 font-bold text-xs py-3 px-4 rounded-xl flex items-center justify-center space-x-2 transition cursor-pointer"
+                    className="flex-1 w-full bg-[#161824] hover:bg-slate-800 border border-slate-700/80 text-slate-200 font-bold text-xs py-3 px-4 rounded-xl flex items-center justify-center space-x-2 transition cursor-pointer"
                   >
-                    <Download className="w-4 h-4 text-amber-400" />
-                    <span>Download Power BI CSV Package</span>
+                    <Download className="w-4 h-4 text-indigo-400" />
+                    <span>Download CSV Data</span>
                   </button>
                 </div>
               </div>
