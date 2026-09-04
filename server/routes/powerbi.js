@@ -41,9 +41,7 @@ router.post('/pbids', async (req, res) => {
                 url: protocolUrl
               }
             },
-            options: {
-              name: question ? `DataMind AI Web Feed: ${question.substring(0, 40)}` : "DataMind AI Web Connection"
-            },
+            options: {},
             mode: null
           }
         ]
@@ -61,9 +59,7 @@ router.post('/pbids', async (req, res) => {
                 database: dbName
               }
             },
-            options: {
-              name: question ? `DataMind AI: ${question.substring(0, 40)}` : "DataMind AI Connection"
-            },
+            options: {},
             mode: "DirectQuery"
           }
         ]
