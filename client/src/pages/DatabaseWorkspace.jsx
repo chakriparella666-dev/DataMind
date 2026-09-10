@@ -23,7 +23,7 @@ export default function DatabaseWorkspace({
   const [matchingSuggestion, setMatchingSuggestion] = useState(null);
   const [viewType, setViewType] = useState('Table'); // 'Table' | 'Bar Chart' | 'Line Chart' | 'Pie Chart'
   const [isRecentExpandedMobile, setIsRecentExpandedMobile] = useState(false);
-  const [showColumnsDrawer, setShowColumnsDrawer] = useState(true);
+  const [showColumnsDrawer, setShowColumnsDrawer] = useState(false);
   const textareaRef = useRef(null);
   const resultsRef = useRef(null);
 
@@ -504,8 +504,8 @@ export default function DatabaseWorkspace({
           </div>
         )}
 
-        {/* Dataset Columns Assistant & Sheet Suggestions Box */}
-        {activeDataSource && (showColumnsDrawer || (error && (error.toLowerCase().includes('not related') || error.toLowerCase().includes('database')))) && (
+        {/* Dataset Columns Assistant & Sheet Suggestions Box (Only visible when user clicks button) */}
+        {activeDataSource && showColumnsDrawer && (
           <DatasetColumnsAssistant
             activeDataSource={activeDataSource}
             onInsertText={handleInsertText}
