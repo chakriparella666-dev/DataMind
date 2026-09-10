@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Download, AlertCircle, Terminal, FileCode2, Sparkles, Trash2, Check, ChevronDown, ChevronUp, X, Columns, HelpCircle, Database, ArrowRight } from 'lucide-react';
+import { Download, AlertCircle, Terminal, FileCode2, Sparkles, Trash2, Check, Copy, ChevronDown, ChevronUp, X, Columns, HelpCircle, Database, ArrowRight } from 'lucide-react';
 import ResultTable from '../components/ResultTable';
 import ChartRenderer from '../components/ChartRenderer';
 import DatasetColumnsAssistant from '../components/DatasetColumnsAssistant';
@@ -109,21 +109,163 @@ export default function DatabaseWorkspace({
     }
   };
 
-  // Helper to ensure SQL is displayed cleanly line-by-line
+  // Helper to ensure SQL is displayed in a clean, structured, standard line-by-line format
   const formatSqlLineByLine = (rawSql) => {
     if (!rawSql) return '';
-    let sql = rawSql.trim();
+    let sql = String(rawSql).trim();
 
-    if (!sql.includes('\n')) {
-      sql = sql
-        .replace(/\s+FROM\s+/gi, '\nFROM ')
-        .replace(/\s+WHERE\s+/gi, '\nWHERE ')
-        .replace(/\s+GROUP BY\s+/gi, '\nGROUP BY ')
-        .replace(/\s+HAVING\s+/gi, '\nHAVING ')
-        .replace(/\s+ORDER BY\s+/gi, '\nORDER BY ')
-        .replace(/\s+LIMIT\s+/gi, '\nLIMIT ');
+    // Standardize whitespace
+    sql = sql.replace(/\s+/g, ' ');
+
+    // Primary SQL clause boundaries to start on their own line
+    const clauseKeywords = [
+      'WITH',
+      'SELECT',
+      'FROM',
+      'LEFT OUTER JOIN',
+      'RIGHT OUTER JOIN',
+      'FULL OUTER JOIN',
+      'LEFT JOIN',
+      'RIGHT JOIN',
+      'INNER JOIN',
+      'FULL JOIN',
+      'CROSS JOIN',
+      'JOIN',
+      'WHERE',
+      'GROUP BY',
+      'HAVING',
+      'ORDER BY',
+      'LIMIT',
+      'OFFSET',
+      'UNION ALL',
+      'UNION'
+    ];
+
+    for (const clause of clauseKeywords) {
+      const regex = new RegExp(`\\b${clause}\\b`, 'gi');
+      sql = sql.replace(regex, `\n${clause.toUpperCase()} `);
     }
-    return sql;
+
+    // Capitalize secondary SQL keywords & common aggregate functions
+    const secondaryKeywords = [
+      'DISTINCT', 'AS', 'AND', 'OR', 'ON', 'IN', 'NOT IN', 'IS NULL', 'IS NOT NULL',
+      'LIKE', 'NOT LIKE', 'BETWEEN', 'NOT BETWEEN', 'EXISTS', 'NOT EXISTS',
+      'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'DESC', 'ASC', 'NULLS FIRST', 'NULLS LAST',
+      'COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'ROUND', 'COALESCE', 'CONCAT', 'LOWER', 'UPPER',
+      'CAST', 'EXTRACT', 'DATE', 'YEAR', 'MONTH', 'DAY'
+    ];
+
+    for (const kw of secondaryKeywords) {
+      const kwRegex = new RegExp(`\\b${kw}\\b`, 'gi');
+      sql = sql.replace(kwRegex, kw.toUpperCase());
+    }
+
+    // Split into lines and structure SELECT columns cleanly
+    const rawLines = sql.split('\n').map(l => l.trim()).filter(Boolean);
+    const structuredLines = [];
+
+    for (const line of rawLines) {
+      if (line.startsWith('SELECT ')) {
+        const selectBody = line.substring(7).trim();
+        // Parse columns separated by commas outside parentheses
+        const cols = [];
+        let current = '';
+        let parenDepth = 0;
+        for (let i = 0; i < selectBody.length; i++) {
+          const char = selectBody[i];
+          if (char === '(') parenDepth++;
+          else if (char === ')') parenDepth--;
+
+          if (char === ',' && parenDepth === 0) {
+            cols.push(current.trim());
+            current = '';
+          } else {
+            current += char;
+          }
+        }
+        if (current.trim()) cols.push(current.trim());
+
+        if (cols.length > 1) {
+          structuredLines.push('SELECT');
+          cols.forEach((col, idx) => {
+            const isLast = idx === cols.length - 1;
+            structuredLines.push(`  ${col}${isLast ? '' : ','}`);
+          });
+        } else {
+          structuredLines.push(`SELECT ${selectBody}`);
+        }
+      } else {
+        structuredLines.push(line);
+      }
+    }
+
+    return structuredLines.join('\n').trim();
+  };
+
+  const renderHighlightedSql = (rawSql) => {
+    const formatted = formatSqlLineByLine(rawSql);
+    if (!formatted) return null;
+
+    const mainKeywords = new Set([
+      'SELECT', 'FROM', 'WHERE', 'GROUP BY', 'HAVING', 'ORDER BY', 'LIMIT', 'OFFSET',
+      'JOIN', 'LEFT JOIN', 'RIGHT JOIN', 'INNER JOIN', 'FULL JOIN', 'CROSS JOIN',
+      'LEFT OUTER JOIN', 'RIGHT OUTER JOIN', 'FULL OUTER JOIN',
+      'ON', 'AS', 'AND', 'OR', 'IN', 'NOT', 'IS', 'NULL', 'LIKE', 'BETWEEN',
+      'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'DESC', 'ASC', 'DISTINCT', 'UNION', 'ALL', 'WITH'
+    ]);
+
+    const sqlFunctions = new Set([
+      'COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'ROUND', 'COALESCE', 'CONCAT', 'LOWER', 'UPPER',
+      'CAST', 'EXTRACT', 'DATE', 'YEAR', 'MONTH', 'DAY', 'SUBSTRING', 'TRIM'
+    ]);
+
+    const lines = formatted.split('\n');
+    return (
+      <div className="font-mono text-sm leading-relaxed space-y-1">
+        {lines.map((line, lIdx) => {
+          const tokens = line.split(/(\s+|[(),;]|\b[A-Za-z_][A-Za-z0-9_]*\b|'[^']*'|\d+)/g).filter(Boolean);
+          return (
+            <div key={lIdx} className="flex items-start">
+              <span className="select-none text-zinc-600 font-mono text-xs w-6 shrink-0 pt-0.5 text-right pr-3">
+                {lIdx + 1}
+              </span>
+              <div className="flex-1 whitespace-pre-wrap break-words">
+                {tokens.map((tok, tIdx) => {
+                  const upper = tok.trim().toUpperCase();
+                  if (mainKeywords.has(upper)) {
+                    return <span key={tIdx} className="text-indigo-400 font-bold">{tok}</span>;
+                  }
+                  if (sqlFunctions.has(upper)) {
+                    return <span key={tIdx} className="text-pink-400 font-bold">{tok}</span>;
+                  }
+                  if (/^'.*'$/.test(tok.trim())) {
+                    return <span key={tIdx} className="text-emerald-400">{tok}</span>;
+                  }
+                  if (/^\d+(\.\d+)?$/.test(tok.trim())) {
+                    return <span key={tIdx} className="text-amber-400 font-semibold">{tok}</span>;
+                  }
+                  if (/^[(),;]$/.test(tok.trim())) {
+                    return <span key={tIdx} className="text-zinc-500 font-bold">{tok}</span>;
+                  }
+                  return <span key={tIdx} className="text-zinc-100">{tok}</span>;
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const [copiedSql, setCopiedSql] = useState(false);
+  const handleCopySql = (sqlText) => {
+    if (!sqlText) return;
+    const formatted = formatSqlLineByLine(sqlText);
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(formatted);
+    }
+    setCopiedSql(true);
+    setTimeout(() => setCopiedSql(false), 2000);
   };
 
   const findMatchingDataSourceLocally = (questionText, dsList, currentDs) => {
@@ -525,11 +667,29 @@ export default function DatabaseWorkspace({
                   <FileCode2 className="w-4 h-4 text-zinc-300" />
                   <span>Generated SQL</span>
                 </h3>
+                <button
+                  type="button"
+                  onClick={() => handleCopySql(activeQuery.sql)}
+                  className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-zinc-300 hover:text-white bg-[#121419] hover:bg-slate-800 border border-slate-700/80 rounded-lg transition cursor-pointer"
+                  title="Copy SQL Query"
+                >
+                  {copiedSql ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="text-emerald-400">Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                      <span>Copy SQL</span>
+                    </>
+                  )}
+                </button>
               </div>
 
-              {/* Line-by-Line Formatted SQL Box */}
+              {/* Line-by-Line Formatted & Syntax Highlighted SQL Box */}
               <div className="bg-[#121419] border border-slate-800 rounded-xl p-4 md:p-5 font-mono text-sm md:text-base text-zinc-100 max-w-full overflow-x-auto leading-relaxed">
-                <pre className="whitespace-pre-wrap break-words font-mono tracking-wide max-w-full">{formatSqlLineByLine(activeQuery.sql)}</pre>
+                {renderHighlightedSql(activeQuery.sql)}
               </div>
 
               {/* Line-by-line Easy to Understand Explanation */}
