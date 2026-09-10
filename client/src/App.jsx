@@ -572,6 +572,7 @@ export default function App() {
         )}
         {activeSection === 'dashboards' && (
           <DashboardsPage
+            dataSources={dataSources}
             onNavigate={(sec, data) => handleNavigate(sec, data)}
           />
         )}

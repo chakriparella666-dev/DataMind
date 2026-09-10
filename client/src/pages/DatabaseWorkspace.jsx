@@ -328,9 +328,10 @@ export default function DatabaseWorkspace({
     if (!activeQuery) return;
     try {
       const fullQ = (activeQuery.question || 'Database Query').trim();
+      const dsName = activeDataSource ? (activeDataSource.name || '') : '';
       await createDashboard({
         name: fullQ,
-        description: `Generated from query: ${fullQ}`,
+        description: dsName ? dsName : '',
         question: fullQ,
         sql: activeQuery.sql,
         dataSourceId: activeDataSource ? (activeDataSource._id || activeDataSource.id) : null,

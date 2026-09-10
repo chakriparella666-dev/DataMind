@@ -184,7 +184,26 @@ export default function DashboardsPage({ onNavigate }) {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {dashboards.map((dash) => {
                     const fullQuestionText = dash.question || dash.description?.replace(/^Generated from query:\s*/i, '') || dash.name?.replace(/^Analytics\s*—\s*/i, '') || 'Database Query';
-                    const datasetName = dash.dataSourceName || dash.datasetName || dash.sourceName || (dash.description && !dash.description.includes(fullQuestionText) ? dash.description : null) || 'Connected Dataset';
+                    
+                    // Accurately resolve actual dataset name
+                    let resolvedDatasetName = dash.dataSourceName || dash.datasetName || dash.sourceName || '';
+                    if (!resolvedDatasetName && dash.dataSourceId && Array.isArray(dataSources)) {
+                      const matchedDs = dataSources.find(ds => String(ds.id || ds._id) === String(dash.dataSourceId));
+                      if (matchedDs) resolvedDatasetName = matchedDs.name;
+                    }
+                    if (!resolvedDatasetName && dash.description && !dash.description.toLowerCase().includes('generated from query') && !dash.description.includes(fullQuestionText)) {
+                      resolvedDatasetName = dash.description;
+                    }
+
+                    // Clean up duplicate "Dataset:" prefixes and replace any placeholder "Connected Dataset"
+                    if (resolvedDatasetName) {
+                      resolvedDatasetName = resolvedDatasetName.replace(/^Dataset:\s*/i, '').replace(/^Dataset:\s*/i, '').trim();
+                      if (resolvedDatasetName.toLowerCase() === 'connected dataset') {
+                        resolvedDatasetName = (dataSources && dataSources.length > 0) ? dataSources[0].name : '';
+                      }
+                    } else if (Array.isArray(dataSources) && dataSources.length > 0) {
+                      resolvedDatasetName = dataSources[0].name;
+                    }
 
                     return (
                       <div
@@ -203,12 +222,14 @@ export default function DashboardsPage({ onNavigate }) {
                               {dash.visibility || 'Private'}
                             </span>
                           </div>
-                          <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-medium">
-                            <span className="text-zinc-500">Dataset:</span>
-                            <span className="text-zinc-300 font-semibold truncate" title={datasetName}>
-                              {datasetName}
-                            </span>
-                          </div>
+                          {resolvedDatasetName && (
+                            <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-medium">
+                              <span className="text-zinc-500 font-semibold">Dataset:</span>
+                              <span className="text-zinc-300 font-bold truncate" title={resolvedDatasetName}>
+                                {resolvedDatasetName}
+                              </span>
+                            </div>
+                          )}
                         </div>
 
                       <div className="pt-3 border-t border-[#2e2e36] flex items-center justify-between">

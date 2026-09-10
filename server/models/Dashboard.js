@@ -3,13 +3,17 @@ const { appQuery, isPgConnected } = require('../config/db');
 class DashboardModel {
   static async findAll(userId = null) {
     if (isPgConnected()) {
-      let query = `SELECT id, name, description, question, sql, data_source_id AS "dataSourceId", layout, date_range AS "dateRange", auto_refresh AS "autoRefresh", tags, visibility, widgets, user_id AS "userId", created_at AS "createdAt", updated_at AS "updatedAt" FROM dashboards`;
+      let query = `SELECT d.id, d.name, d.description, d.question, d.sql, d.data_source_id AS "dataSourceId",
+                     ds.name AS "dataSourceName", ds.type AS "dataSourceType",
+                     d.layout, d.date_range AS "dateRange", d.auto_refresh AS "autoRefresh", d.tags, d.visibility, d.widgets, d.user_id AS "userId", d.created_at AS "createdAt", d.updated_at AS "updatedAt"
+                   FROM dashboards d
+                   LEFT JOIN data_sources ds ON (d.data_source_id::text = ds.id::text) `;
       const params = [];
       if (userId) {
-        query += ` WHERE user_id = $1`;
+        query += ` WHERE d.user_id = $1`;
         params.push(String(userId));
       }
-      query += ` ORDER BY created_at DESC;`;
+      query += ` ORDER BY d.created_at DESC;`;
       const res = await appQuery(query, params);
       return res.rows.map(r => ({ ...r, _id: r.id.toString() }));
     }
