@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Sparkles, MessageSquare, Mic, MicOff, Edit2, RotateCcw, Plus, Image, X, Trash2 } from 'lucide-react';
 import FormattedMarkdown from '../components/FormattedMarkdown';
 import { sendChatMessage } from '../services/api';
@@ -21,6 +21,15 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
   // Attached File / Image State
   const [attachedImage, setAttachedImage] = useState(null);
   const fileInputRef = useRef(null);
+  const messagesEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, loading]);
 
   const handleClearChat = () => {
     setMessages([
@@ -311,6 +320,7 @@ export default function GeneralChatPage({ onAddSession, messages: propMessages, 
             </div>
           </div>
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Input Bar */}

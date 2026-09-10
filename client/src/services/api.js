@@ -79,8 +79,8 @@ export const sendChatMessage = async (payload) => {
   return res.data;
 };
 
-export const getChatSessions = async () => {
-  const res = await axios.get(`${API_BASE}/agent/sessions`);
+export const getChatSessions = async (mode = null) => {
+  const res = await axios.get(`${API_BASE}/agent/sessions`, { params: mode ? { mode } : {} });
   return res.data;
 };
 

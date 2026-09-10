@@ -118,7 +118,8 @@ router.post('/chat', async (req, res) => {
 router.get('/sessions', async (req, res) => {
   try {
     const userId = getUserIdFromReq(req);
-    const sessions = await ChatSession.find(userId);
+    const { mode } = req.query;
+    const sessions = await ChatSession.find(userId, mode || null);
     res.json({ success: true, sessions });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });

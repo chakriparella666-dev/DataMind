@@ -70,14 +70,22 @@ class ChatSessionModel {
     }
   }
 
-  static async find(userId = null) {
+  static async find(userId = null, mode = null) {
     if (isPgConnected()) {
       let query = `SELECT id, session_id AS "sessionId", title, mode, data_source_id AS "dataSourceId", user_id AS "userId", created_at AS "createdAt", updated_at AS "updatedAt"
          FROM chat_sessions`;
       const params = [];
+      const conditions = [];
       if (userId) {
-        query += ` WHERE user_id = $1`;
         params.push(String(userId));
+        conditions.push(`user_id = $${params.length}`);
+      }
+      if (mode) {
+        params.push(String(mode));
+        conditions.push(`mode = $${params.length}`);
+      }
+      if (conditions.length > 0) {
+        query += ` WHERE ` + conditions.join(' AND ');
       }
       query += ` ORDER BY updated_at DESC LIMIT 20;`;
       const res = await appQuery(query, params);

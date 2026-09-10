@@ -9,7 +9,7 @@ class User {
     return jwt.sign(
       { id: user.id || user._id, email: user.email, name: user.name },
       JWT_SECRET,
-      { expiresIn: '30d' }
+      { expiresIn: '365d' }
     );
   }
 

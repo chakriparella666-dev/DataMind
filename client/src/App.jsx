@@ -142,10 +142,20 @@ export default function App() {
       return saved ? JSON.parse(saved) : null;
     } catch (e) { return null; }
   });
+  const isGeneralGreetingOrNonSql = (text) => {
+    if (!text || typeof text !== 'string') return true;
+    const t = text.trim().toLowerCase();
+    return /^(hi|hii|hiii|hello|hey|heyy|how are you|who are you|thanks|thank you)\b/i.test(t) || t === 'new chat' || t === 'default session';
+  };
+
   const [workspaceRecentQueries, setWorkspaceRecentQueries] = useState(() => {
     try {
       const saved = localStorage.getItem('datamind_workspace_recent_queries');
-      return saved ? JSON.parse(saved) : [];
+      if (!saved) return [];
+      const parsed = JSON.parse(saved);
+      return Array.isArray(parsed)
+        ? parsed.filter(q => q && q.question && !isGeneralGreetingOrNonSql(q.question) && (q.sql || q.rows?.length > 0))
+        : [];
     } catch (e) { return []; }
   });
 
@@ -171,31 +181,36 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem('datamind_workspace_recent_queries', JSON.stringify(workspaceRecentQueries));
+      const cleanQueries = (workspaceRecentQueries || []).filter(q => q && q.question && !isGeneralGreetingOrNonSql(q.question));
+      localStorage.setItem('datamind_workspace_recent_queries', JSON.stringify(cleanQueries));
     } catch (e) { }
   }, [workspaceRecentQueries]);
 
-  // Fetch recent queries from database on load to restore state after refresh
+  // Fetch recent queries from database on load to restore state after refresh (filtered strictly to SQL mode)
   useEffect(() => {
-    getChatSessions()
+    getChatSessions('sql')
       .then(res => {
         if (res.success && Array.isArray(res.sessions)) {
-          const formatted = res.sessions.map(s => ({
-            id: s.sessionId || s._id || s.id,
-            question: s.question || s.title || '',
-            sql: s.sql || '',
-            explanation: s.explanation || '',
-            columns: s.columns || s.fields || [],
-            rows: s.rows || s.data || [],
-            rowCount: s.rowCount !== undefined ? s.rowCount : (s.data ? s.data.length : 0),
-            executionTimeMs: s.executionTimeMs || 180
-          })).filter(s => s.question);
+          const formatted = res.sessions
+            .filter(s => s && s.mode !== 'general' && s.question && !isGeneralGreetingOrNonSql(s.question) && (s.sql || s.rows?.length > 0))
+            .map(s => ({
+              id: s.sessionId || s._id || s.id,
+              question: s.question || s.title || '',
+              sql: s.sql || '',
+              explanation: s.explanation || '',
+              columns: s.columns || s.fields || [],
+              rows: s.rows || s.data || [],
+              rowCount: s.rowCount !== undefined ? s.rowCount : (s.data ? s.data.length : 0),
+              executionTimeMs: s.executionTimeMs || 180
+            }));
 
           if (formatted.length > 0) {
             setWorkspaceRecentQueries(prev => {
               const map = new Map();
               [...prev, ...formatted].forEach(q => {
-                if (q.question) map.set(q.question.trim().toLowerCase(), q);
+                if (q.question && !isGeneralGreetingOrNonSql(q.question)) {
+                  map.set(q.question.trim().toLowerCase(), q);
+                }
               });
               return Array.from(map.values());
             });

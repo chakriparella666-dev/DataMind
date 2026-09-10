@@ -184,7 +184,7 @@ export default function DashboardsPage({ onNavigate }) {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {dashboards.map((dash) => {
                     const fullQuestionText = dash.question || dash.description?.replace(/^Generated from query:\s*/i, '') || dash.name?.replace(/^Analytics\s*—\s*/i, '') || 'Database Query';
-                    const fullDescText = `Generated from query: ${fullQuestionText}`;
+                    const datasetName = dash.dataSourceName || dash.datasetName || dash.sourceName || (dash.description && !dash.description.includes(fullQuestionText) ? dash.description : null) || 'Connected Dataset';
 
                     return (
                       <div
@@ -194,7 +194,7 @@ export default function DashboardsPage({ onNavigate }) {
                         <div className="space-y-2.5">
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex items-start space-x-2 text-zinc-300 font-bold text-sm min-w-0 flex-1">
-                              <LayoutDashboard className="w-4 h-4 shrink-0 mt-0.5 text-zinc-300" />
+                              <LayoutDashboard className="w-4 h-4 shrink-0 mt-0.5 text-indigo-400" />
                               <span className="text-white text-sm md:text-base font-bold leading-snug break-words" title={fullQuestionText}>
                                 {fullQuestionText}
                               </span>
@@ -203,9 +203,12 @@ export default function DashboardsPage({ onNavigate }) {
                               {dash.visibility || 'Private'}
                             </span>
                           </div>
-                          <p className="text-xs text-zinc-400 leading-relaxed font-medium break-words" title={fullDescText}>
-                            {fullDescText}
-                          </p>
+                          <div className="flex items-center gap-1.5 text-xs text-zinc-400 font-medium">
+                            <span className="text-zinc-500">Dataset:</span>
+                            <span className="text-zinc-300 font-semibold truncate" title={datasetName}>
+                              {datasetName}
+                            </span>
+                          </div>
                         </div>
 
                       <div className="pt-3 border-t border-[#2e2e36] flex items-center justify-between">

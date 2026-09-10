@@ -25,6 +25,7 @@ export default function DatabaseWorkspace({
   const [isRecentExpandedMobile, setIsRecentExpandedMobile] = useState(false);
   const [showColumnsDrawer, setShowColumnsDrawer] = useState(true);
   const textareaRef = useRef(null);
+  const resultsRef = useRef(null);
 
   const handleInsertText = (textToInsert) => {
     if (!textareaRef.current) {
@@ -248,6 +249,13 @@ export default function DatabaseWorkspace({
         if (setActiveQuery) setActiveQuery(newQueryResult);
         if (setRecentQueries) setRecentQueries(prev => [newQueryResult, ...(prev || [])]);
         onAddSession?.(qToRun);
+
+        // Directly scroll up/to the results table smoothly so the user sees the generated answer immediately
+        setTimeout(() => {
+          if (resultsRef.current) {
+            resultsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 120);
       } else {
         const matchingDs = findMatchingDataSourceLocally(qToRun, dataSources, activeDs);
         setMatchingSuggestion(matchingDs);
@@ -510,7 +518,7 @@ export default function DatabaseWorkspace({
         {activeQuery ? (
           <>
             {/* Generated SQL Box */}
-            <div className="bg-[#181a20] border border-slate-800/90 rounded-2xl p-5 md:p-6 shadow-xl space-y-4 min-w-0 max-w-full">
+            <div ref={resultsRef} className="bg-[#181a20] border border-slate-800/90 rounded-2xl p-5 md:p-6 shadow-xl space-y-4 min-w-0 max-w-full scroll-mt-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
                   <FileCode2 className="w-4 h-4 text-zinc-300" />
@@ -640,22 +648,22 @@ export default function DatabaseWorkspace({
           </div>
         </div>
 
-        <div className={`space-y-3.5 overflow-y-auto flex-1 pr-1 mt-3 ${isRecentExpandedMobile ? 'block' : 'hidden md:block'}`}>
+        <div className={`space-y-3 overflow-y-auto flex-1 pr-1 mt-3.5 ${isRecentExpandedMobile ? 'block' : 'hidden md:block'}`}>
           {recentQueries.length > 0 ? (
-            recentQueries.map((item) => (
+            recentQueries.map((item, index) => (
               <div
-                key={item.id}
+                key={item.id || `rq_${index}`}
                 onClick={() => {
                   handleSelectRecent(item);
                   setIsRecentExpandedMobile(false);
                 }}
-                className={`p-3.5 rounded-xl border transition cursor-pointer relative group ${activeQuery?.question === item.question
-                    ? 'bg-[#1b1e27] border-white text-white'
-                    : 'bg-[#181a20] border-slate-800/80 hover:border-slate-700 text-slate-300'
+                className={`p-3.5 rounded-xl border transition cursor-pointer relative group flex flex-col justify-between space-y-2 shadow-sm ${activeQuery?.question === item.question
+                    ? 'bg-[#1e222d] border-indigo-500/80 ring-1 ring-indigo-500/40 text-white'
+                    : 'bg-[#181a20] border-slate-800/90 hover:border-slate-700 hover:bg-[#1a1d26] text-slate-300'
                   }`}
               >
-                <div className="flex items-start justify-between gap-2 mb-1.5">
-                  <p className="text-sm font-bold text-slate-200 line-clamp-2 pr-1">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-bold text-slate-100 line-clamp-2 pr-1 leading-snug">
                     {item.question}
                   </p>
                   <button
@@ -667,12 +675,20 @@ export default function DatabaseWorkspace({
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
-                <button
-                  type="button"
-                  className="text-xs text-zinc-300 hover:text-white font-semibold underline"
-                >
-                  View details
-                </button>
+                <div className="flex items-center justify-between pt-1 border-t border-slate-800/50">
+                  <button
+                    type="button"
+                    className="text-xs text-indigo-400 group-hover:text-indigo-300 font-semibold flex items-center gap-1"
+                  >
+                    <span>View details</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </button>
+                  {item.rowCount !== undefined && (
+                    <span className="text-[10px] text-zinc-500 font-mono">
+                      {item.rowCount} rows
+                    </span>
+                  )}
+                </div>
               </div>
             ))
           ) : (
