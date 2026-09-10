@@ -1,9 +1,9 @@
-const { generateGeminiText } = require('./geminiClient');
+const { generateGroqText } = require('./groqClient');
 const { retrieveRelevantContext } = require('./ragRetrieval');
 const { runQueryOnDb } = require('../utils/databaseExecutor');
 
 /**
- * Classifies user message intent using Gemini AI
+ * Classifies user message intent using Groq AI
  */
 const classifyIntent = async (message) => {
   const prompt = `Classify the following user input into ONE of two categories:
@@ -15,7 +15,7 @@ User Input: "${message}"
 Respond strictly with a JSON object: { "intent": "sql_question" } or { "intent": "general_chat" }`;
 
   try {
-    const raw = await generateGeminiText(prompt, 'You are an intent classifier.', 'gemini-3.5-flash');
+    const raw = await generateGroqText(prompt, 'You are an intent classifier.', 'qwen/qwen3.8-27b', null, true);
     if (raw) {
       const match = raw.match(/\{[\s\S]*\}/);
       if (match) {
@@ -30,30 +30,27 @@ Respond strictly with a JSON object: { "intent": "sql_question" } or { "intent":
 };
 
 /**
- * Generates smart responses for General AI Chatbot mode strictly via Gemini API key
+ * Generates smart responses for General AI Chatbot mode strictly via Groq API key
  */
 const getSmartGeneralReply = async (message, history = [], image = null) => {
-  // Keep last 6 turns and truncate past responses to max 300 chars for sub-2-second ultra-fast execution
+  // Keep last 6 turns and truncate past responses to max 300 chars for sub-second ultra-fast execution
   const recentHistory = (history || []).slice(-6);
   const historyText = recentHistory
     .map(h => `${h.sender === 'user' ? 'User' : 'Assistant'}: ${(h.text || '').slice(0, 300)}`)
     .join('\n');
 
-  const systemPrompt = `You are DataMind General AI Assistant. Help the user with SQL syntax, database normalization, query optimizations, indexes, CTEs, joins, general software engineering questions, or analyzing uploaded images.
+  const systemPrompt = `You are DataMind General AI Assistant powered by Groq. Help the user with SQL syntax, database normalization, query optimizations, indexes, CTEs, joins, general software engineering questions, or analyzing uploaded images.
 When an image is provided, analyze the image thoroughly and explain its contents, text, tables, diagrams, database models, charts, code screenshots, or objects in clear, comprehensive markdown.`;
 
   const userPrompt = `${historyText ? `Recent Conversation Context:\n${historyText}\n\n` : ''}User Question: "${message || 'Please analyze this uploaded image and provide detailed information about it.'}"`;
 
   try {
-    const reply = await generateGeminiText(userPrompt, systemPrompt, 'gemini-1.5-flash', image);
+    const reply = await generateGroqText(userPrompt, systemPrompt, 'qwen/qwen3.8-27b', image);
     if (reply && reply.trim()) {
       return reply.trim();
     }
-    return `⚠️ Could not generate a response from DataMind AI. Please verify that your GEMINI_API_KEY in server/.env is valid and active.`;
+    return `⚠️ Could not generate a response from DataMind AI. Please verify that your GROQ_API_KEY in server/.env is valid and active.`;
   } catch (err) {
-    if (err.message && (err.message.includes('401') || err.message.includes('Unauthorized') || err.message.includes('API_KEY'))) {
-      return `⚠️ **DataMind AI Key Error**: The current \`GEMINI_API_KEY\` in \`server/.env\` is invalid or unauthorized (starts with \`AQ.Ab...\`). Please provide a valid Google AI Studio API key starting with \`AIzaSy...\` in your \`server/.env\` file.`;
-    }
     return `⚠️ **DataMind AI Error**: ${err.message}`;
   }
 };
@@ -267,7 +264,7 @@ STRICT JSON OUTPUT FORMAT (Respond ONLY with valid JSON):
   "explanation": "Retrieves details from the database."
 }`;
 
-  let sqlGenRes = await generateGeminiText(`User Question: "${message}"`, systemPrompt, 'gemini-3.5-flash-lite');
+  let sqlGenRes = await generateGroqText(`User Question: "${message}"`, systemPrompt, 'qwen/qwen3.8-27b', null, true);
 
   let isRelevant = true;
   let generatedSql = '';
