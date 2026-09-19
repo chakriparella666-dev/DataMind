@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Download, Copy, CheckCheck, RefreshCw, Database, BarChart2,
   Sparkles, Layers, Check, AlertCircle, Code, Filter,
   FileSpreadsheet, Play, Activity, Search,
-  ChevronRight, Terminal, PieChart, TrendingUp, BarChart3, X
+  ChevronRight, Terminal, PieChart, TrendingUp, BarChart3, X,
+  Grid, SlidersHorizontal, ArrowUpDown
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart as RechartsPie,
@@ -27,12 +28,13 @@ export default function PowerBIViewer({ onNavigate }) {
   const [dashboardData, setDashboardData] = useState(null);
   const [schemaData, setSchemaData] = useState(null);
 
-  // UI & Loading States
+  // UI & Slicer States
   const [loadingList, setLoadingList] = useState(true);
   const [loadingDashboard, setLoadingDashboard] = useState(false);
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
-  const [activeChartType, setActiveChartType] = useState('bar'); // 'bar' | 'line' | 'area' | 'donut'
+  const [activeChartType, setActiveChartType] = useState('bar'); // 'bar' | 'line' | 'area'
+  const [selectedSlicers, setSelectedSlicers] = useState({}); // { [colName]: selectedVal }
   const [filterText, setFilterText] = useState('');
 
   // Custom Query Bar State
@@ -72,7 +74,6 @@ export default function PowerBIViewer({ onNavigate }) {
         setActiveQuery(initial);
         runQueryDashboard(initial.sql, initial.question || initial.name);
       } else {
-        // Fallback default query if no dashboards exist yet
         const defaultSql = `SELECT name_of_emp, department, designation, salary FROM tbl_sheet1_604870 LIMIT 10;`;
         runQueryDashboard(defaultSql, 'Sample Employee Salary Distribution');
       }
@@ -93,6 +94,7 @@ export default function PowerBIViewer({ onNavigate }) {
     if (!sqlString || !sqlString.trim()) return;
     setLoadingDashboard(true);
     setError(null);
+    setSelectedSlicers({});
     try {
       const res = await executePowerBIQuery({
         sql: sqlString.trim(),
@@ -103,9 +105,6 @@ export default function PowerBIViewer({ onNavigate }) {
         setDashboardData(res.dashboard);
         setCustomSql(sqlString.trim());
         setCustomQuestion(questionString || '');
-        if (res.dashboard.chartConfig?.chartType) {
-          setActiveChartType(res.dashboard.chartConfig.chartType === 'donut' ? 'donut' : res.dashboard.chartConfig.chartType);
-        }
       } else {
         setError(res.error || 'Failed to generate Power BI dashboard');
       }
@@ -129,6 +128,18 @@ export default function PowerBIViewer({ onNavigate }) {
     runQueryDashboard(customSql, customQuestion || 'Custom SQL Query');
   };
 
+  // Toggle Slicer selection
+  const handleToggleSlicer = (colName, val) => {
+    setSelectedSlicers(prev => {
+      if (prev[colName] === val) {
+        const next = { ...prev };
+        delete next[colName];
+        return next;
+      }
+      return { ...prev, [colName]: val };
+    });
+  };
+
   // 1-Click PBIDS Download Handler
   const handleDownloadPbids = () => {
     const url = `/api/powerbi/export-pbids`;
@@ -149,14 +160,114 @@ export default function PowerBIViewer({ onNavigate }) {
     setTimeout(() => setCopiedField(''), 2500);
   };
 
+  // Dynamic Sliced Rows (Client-side interactive slicing)
+  const slicedRows = useMemo(() => {
+    if (!dashboardData?.rows) return [];
+    return dashboardData.rows.filter(r => {
+      // Check slicer filters
+      for (const [col, val] of Object.entries(selectedSlicers)) {
+        if (String(r[col] || '').trim() !== String(val).trim()) {
+          return false;
+        }
+      }
+      // Check search text filter
+      if (filterText.trim()) {
+        const match = Object.values(r).some(v => String(v || '').toLowerCase().includes(filterText.toLowerCase()));
+        if (!match) return false;
+      }
+      return true;
+    });
+  }, [dashboardData?.rows, selectedSlicers, filterText]);
+
+  // Dynamically recompute visuals based on sliced rows
+  const dynamicVisuals = useMemo(() => {
+    if (!dashboardData?.columns || slicedRows.length === 0) {
+      return {
+        primaryData: [],
+        donutData: [],
+        kpis: dashboardData?.kpis || []
+      };
+    }
+
+    const numericCols = dashboardData.columns.filter(c => c.type === 'numeric').map(c => c.name);
+    const textCols = dashboardData.columns.filter(c => c.type !== 'numeric').map(c => c.name);
+
+    if (numericCols.length > 0 && textCols.length > 0) {
+      const primaryDim = textCols[0];
+      const secondaryDim = textCols[1] || textCols[0];
+      const metric = numericCols[0];
+
+      // Primary group
+      const grp = {};
+      slicedRows.forEach(r => {
+        const key = String(r[primaryDim] || 'Other').trim();
+        if (!grp[key]) grp[key] = { [primaryDim]: key };
+        numericCols.slice(0, 3).forEach(nc => {
+          grp[key][nc] = (grp[key][nc] || 0) + (Number(r[nc]) || 0);
+        });
+      });
+
+      // Secondary donut
+      const dGrp = {};
+      slicedRows.forEach(r => {
+        const key = String(r[secondaryDim] || 'Other').trim();
+        dGrp[key] = (dGrp[key] || 0) + (Number(r[metric]) || 1);
+      });
+
+      return {
+        primaryData: Object.values(grp),
+        donutData: Object.entries(dGrp).map(([name, value]) => ({ name, value: Math.round(value * 100) / 100 })),
+        primaryXKey: primaryDim,
+        primaryYKeys: numericCols.slice(0, 3),
+        primaryTitle: `${numericCols.join(' & ').replace(/_/g, ' ')} by ${primaryDim.replace(/_/g, ' ')}`,
+        donutTitle: `${metric.replace(/_/g, ' ')} Share by ${secondaryDim.replace(/_/g, ' ')}`
+      };
+    } else if (textCols.length > 0) {
+      const primaryDim = textCols[0];
+      const secondaryDim = textCols[1] || textCols[0];
+
+      // Primary frequency
+      const f1 = {};
+      slicedRows.forEach(r => {
+        const key = String(r[primaryDim] || 'Unknown').trim();
+        f1[key] = (f1[key] || 0) + 1;
+      });
+
+      // Secondary frequency
+      const f2 = {};
+      slicedRows.forEach(r => {
+        const key = String(r[secondaryDim] || 'Unknown').trim();
+        f2[key] = (f2[key] || 0) + 1;
+      });
+
+      return {
+        primaryData: Object.entries(f1).map(([k, v]) => ({ [primaryDim]: k, 'Record Count': v })),
+        donutData: Object.entries(f2).map(([name, value]) => ({ name, value })),
+        primaryXKey: primaryDim,
+        primaryYKeys: ['Record Count'],
+        primaryTitle: `Record Volume by ${primaryDim.replace(/_/g, ' ').toUpperCase()}`,
+        donutTitle: `Distribution by ${secondaryDim.replace(/_/g, ' ').toUpperCase()}`
+      };
+    } else {
+      return {
+        primaryData: slicedRows.map((r, i) => ({ Index: `Row ${i + 1}`, ...r })),
+        donutData: [],
+        primaryXKey: 'Index',
+        primaryYKeys: numericCols.slice(0, 3),
+        primaryTitle: 'Metrics Distribution',
+        donutTitle: ''
+      };
+    }
+  }, [dashboardData?.columns, slicedRows]);
+
   // Export Table Rows to CSV
   const handleExportCsv = () => {
-    if (!dashboardData?.rows || dashboardData.rows.length === 0) return;
+    if (slicedRows.length === 0) return;
     const cols = dashboardData.columns.map(c => c.name);
     const csvRows = [];
     csvRows.push(cols.join(','));
 
-    for (const row of dashboardData.rows) {
+    for (const row of slicedRows) {
       const values = cols.map(col => {
         const val = row[col];
         if (val === null || val === undefined) return '""';
@@ -218,12 +329,6 @@ export default function PowerBIViewer({ onNavigate }) {
     }, 450);
   };
 
-  // Filtered rows
-  const filteredRows = dashboardData?.rows ? dashboardData.rows.filter(row => {
-    if (!filterText.trim()) return true;
-    return Object.values(row).some(v => String(v || '').toLowerCase().includes(filterText.toLowerCase()));
-  }) : [];
-
   return (
     <div className="flex-1 flex flex-col h-full bg-[#111318] text-slate-100 font-sans antialiased overflow-hidden select-none">
       
@@ -241,11 +346,11 @@ export default function PowerBIViewer({ onNavigate }) {
                 {dashboardData?.question || activeQuery?.title || 'Power BI SQL Query Dashboard'}
               </h2>
               <span className="px-2 py-0.5 bg-amber-500/15 border border-amber-500/40 text-amber-300 text-[10px] font-black rounded-md uppercase tracking-wider">
-                SQL Result Dashboard
+                Live BI Canvas
               </span>
             </div>
             <p className="text-xs text-zinc-400 truncate">
-              {dashboardData ? `${dashboardData.totalRows} rows computed in ${dashboardData.executionTimeMs}ms` : 'Automated Power BI Dashboard from generated SQL'}
+              {dashboardData ? `${slicedRows.length} of ${dashboardData.totalRows} records displayed (${dashboardData.executionTimeMs}ms query)` : 'Automated Power BI Dashboard from generated SQL'}
             </p>
           </div>
         </div>
@@ -368,6 +473,46 @@ export default function PowerBIViewer({ onNavigate }) {
         </form>
       )}
 
+      {/* Interactive Slicers Bar */}
+      {dashboardData?.visuals?.slicers && Object.keys(dashboardData.visuals.slicers).length > 0 && (
+        <div className="bg-[#13151a] border-b border-[#22252e] px-5 py-2 flex items-center space-x-3 overflow-x-auto no-scrollbar shrink-0 text-xs">
+          <span className="font-bold text-zinc-400 flex items-center gap-1 uppercase tracking-wider text-[11px] shrink-0">
+            <SlidersHorizontal className="w-3 h-3 text-amber-400" /> Slicers:
+          </span>
+          {Object.entries(dashboardData.visuals.slicers).map(([colName, vals]) => (
+            <div key={colName} className="flex items-center space-x-1.5 bg-[#1a1c24] border border-[#2c303c] rounded-lg px-2 py-1 shrink-0">
+              <span className="text-zinc-400 font-bold text-[11px]">{colName}:</span>
+              <div className="flex items-center space-x-1">
+                {vals.slice(0, 5).map(val => {
+                  const isSelected = selectedSlicers[colName] === val;
+                  return (
+                    <button
+                      key={val}
+                      onClick={() => handleToggleSlicer(colName, val)}
+                      className={`px-2 py-0.5 rounded text-[11px] font-medium transition ${
+                        isSelected
+                          ? 'bg-amber-500 text-black font-bold'
+                          : 'bg-[#22252e] text-zinc-300 hover:text-white hover:bg-[#2b2f3a]'
+                      }`}
+                    >
+                      {val}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+          {Object.keys(selectedSlicers).length > 0 && (
+            <button
+              onClick={() => setSelectedSlicers({})}
+              className="text-[11px] text-amber-400 hover:underline font-bold shrink-0 ml-1"
+            >
+              Clear Slicers
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Alerts */}
       {error && (
         <div className="m-4 p-3.5 bg-rose-950/70 border border-rose-700/80 rounded-xl text-rose-200 text-xs flex items-center justify-between shadow-lg">
@@ -389,7 +534,7 @@ export default function PowerBIViewer({ onNavigate }) {
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center animate-spin">
               <RefreshCw className="w-5 h-5 text-amber-400" />
             </div>
-            <p className="text-xs font-bold text-zinc-300">Generating Power BI Dashboard from SQL results...</p>
+            <p className="text-xs font-bold text-zinc-300">Generating interactive Power BI Report Canvas from SQL...</p>
           </div>
         ) : !dashboardData ? (
           <div className="flex-1 flex items-center justify-center text-zinc-500 text-xs">
@@ -417,16 +562,18 @@ export default function PowerBIViewer({ onNavigate }) {
               </div>
             )}
 
-            {/* Visual Analytics Chart Container */}
-            {dashboardData.rows && dashboardData.rows.length > 0 && (
-              <div className="bg-[#181a20] border border-[#2a2d36] rounded-2xl p-5 shadow-md space-y-4">
-                
-                {/* Visual Header & Chart Type Switcher */}
+            {/* Multi-Visual Power BI Layout: Visual 1 (Bar/Line) + Visual 2 (Donut) */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              
+              {/* Visual 1: Primary Aggregated Chart */}
+              <div className="lg:col-span-2 bg-[#181a20] border border-[#2a2d36] rounded-2xl p-5 shadow-md space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#262832] pb-3">
                   <div>
-                    <h3 className="text-sm font-extrabold text-white">Power BI Interactive Visual</h3>
+                    <h3 className="text-sm font-extrabold text-white">
+                      {dynamicVisuals.primaryTitle || 'Primary Visual Analytics'}
+                    </h3>
                     <p className="text-xs text-zinc-400">
-                      Metric distribution for <code className="text-amber-300 font-mono">{dashboardData.chartConfig?.xAxisKey || 'Records'}</code>
+                      Grouped distribution for <code className="text-amber-300 font-mono">{dynamicVisuals.primaryXKey || 'Dimensions'}</code>
                     </p>
                   </div>
 
@@ -450,68 +597,116 @@ export default function PowerBIViewer({ onNavigate }) {
                       <TrendingUp className="w-3.5 h-3.5" />
                       <span>Line</span>
                     </button>
-                    <button
-                      onClick={() => setActiveChartType('donut')}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition ${
-                        activeChartType === 'donut' ? 'bg-amber-500 text-black font-extrabold' : 'text-zinc-400 hover:text-white'
-                      }`}
-                    >
-                      <PieChart className="w-3.5 h-3.5" />
-                      <span>Donut</span>
-                    </button>
                   </div>
                 </div>
 
-                {/* Render Selected Chart */}
                 <div className="w-full h-72 md:h-80 pt-2">
                   <ResponsiveContainer width="100%" height="100%">
                     {activeChartType === 'line' ? (
-                      <LineChart data={dashboardData.rows} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
+                      <LineChart data={dynamicVisuals.primaryData} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#262a34" />
-                        <XAxis dataKey={dashboardData.chartConfig.xAxisKey} stroke="#71717a" fontSize={11} tickLine={false} />
+                        <XAxis dataKey={dynamicVisuals.primaryXKey} stroke="#71717a" fontSize={11} tickLine={false} />
                         <YAxis stroke="#71717a" fontSize={11} tickLine={false} />
                         <Tooltip contentStyle={{ backgroundColor: '#181a20', borderColor: '#343844', borderRadius: '12px', fontSize: '12px' }} />
                         <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                        {dashboardData.chartConfig.yAxisKeys.map((k, i) => (
+                        {dynamicVisuals.primaryYKeys?.map((k, i) => (
                           <Line key={k} type="monotone" dataKey={k} stroke={PALETTE[i % PALETTE.length]} strokeWidth={2.5} dot={{ r: 3 }} />
                         ))}
                       </LineChart>
-                    ) : activeChartType === 'donut' ? (
-                      <RechartsPie data={dashboardData.rows}>
+                    ) : (
+                      <BarChart data={dynamicVisuals.primaryData} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#262a34" />
+                        <XAxis dataKey={dynamicVisuals.primaryXKey} stroke="#71717a" fontSize={11} tickLine={false} />
+                        <YAxis stroke="#71717a" fontSize={11} tickLine={false} />
+                        <Tooltip contentStyle={{ backgroundColor: '#181a20', borderColor: '#343844', borderRadius: '12px', fontSize: '12px' }} />
+                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                        {dynamicVisuals.primaryYKeys?.map((k, i) => (
+                          <Bar key={k} dataKey={k} fill={PALETTE[i % PALETTE.length]} radius={[6, 6, 0, 0]} />
+                        ))}
+                      </BarChart>
+                    )}
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Visual 2: Secondary Donut Share */}
+              <div className="bg-[#181a20] border border-[#2a2d36] rounded-2xl p-5 shadow-md space-y-4 flex flex-col justify-between">
+                <div className="border-b border-[#262832] pb-3">
+                  <h3 className="text-sm font-extrabold text-white">
+                    {dynamicVisuals.donutTitle || 'Dimensional Distribution'}
+                  </h3>
+                  <p className="text-xs text-zinc-400">Share breakdown</p>
+                </div>
+
+                <div className="w-full h-64 md:h-72">
+                  {dynamicVisuals.donutData && dynamicVisuals.donutData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsPie>
                         <Pie
-                          data={dashboardData.rows}
-                          dataKey={dashboardData.chartConfig.yAxisKeys[0] || dashboardData.columns[0]?.name}
-                          nameKey={dashboardData.chartConfig.xAxisKey}
+                          data={dynamicVisuals.donutData}
+                          dataKey="value"
+                          nameKey="name"
                           cx="50%"
                           cy="50%"
-                          innerRadius={60}
-                          outerRadius={95}
-                          paddingAngle={4}
+                          innerRadius={55}
+                          outerRadius={85}
+                          paddingAngle={3}
                         >
-                          {dashboardData.rows.map((entry, index) => (
+                          {dynamicVisuals.donutData.map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={PALETTE[index % PALETTE.length]} />
                           ))}
                         </Pie>
                         <Tooltip contentStyle={{ backgroundColor: '#181a20', borderColor: '#343844', borderRadius: '12px', fontSize: '12px' }} />
-                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                        <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '8px' }} />
                       </RechartsPie>
-                    ) : (
-                      <BarChart data={dashboardData.rows} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#262a34" />
-                        <XAxis dataKey={dashboardData.chartConfig.xAxisKey} stroke="#71717a" fontSize={11} tickLine={false} />
-                        <YAxis stroke="#71717a" fontSize={11} tickLine={false} />
-                        <Tooltip contentStyle={{ backgroundColor: '#181a20', borderColor: '#343844', borderRadius: '12px', fontSize: '12px' }} />
-                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                        {dashboardData.chartConfig.yAxisKeys.length > 0 ? (
-                          dashboardData.chartConfig.yAxisKeys.map((k, i) => (
-                            <Bar key={k} dataKey={k} fill={PALETTE[i % PALETTE.length]} radius={[6, 6, 0, 0]} />
-                          ))
-                        ) : (
-                          <Bar dataKey={dashboardData.columns[0]?.name} fill="#f59e0b" radius={[6, 6, 0, 0]} />
-                        )}
-                      </BarChart>
-                    )}
-                  </ResponsiveContainer>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-zinc-500 text-xs">
+                      Single dimension dataset
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Visual 3: Cross-Tab Matrix (Pivot Breakdown) */}
+            {dashboardData.visuals?.matrix?.matrixData && dashboardData.visuals.matrix.matrixData.length > 0 && (
+              <div className="bg-[#181a20] border border-[#2a2d36] rounded-2xl p-5 shadow-md space-y-3">
+                <div className="flex items-center justify-between border-b border-[#262832] pb-3">
+                  <div>
+                    <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
+                      <Grid className="w-4 h-4 text-amber-400" />
+                      <span>Power BI Matrix Breakdown</span>
+                    </h3>
+                    <p className="text-xs text-zinc-400">
+                      Cross-tabulation: <span className="text-amber-300 font-bold">{dashboardData.visuals.matrix.rowKey}</span> &times; <span className="text-indigo-300 font-bold">{dashboardData.visuals.matrix.colKey}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto border border-[#2e323c] rounded-xl max-h-60">
+                  <table className="w-full text-left text-xs border-collapse font-sans">
+                    <thead className="bg-[#14161c] text-zinc-300 font-bold border-b border-[#2e323c] sticky top-0">
+                      <tr>
+                        {Object.keys(dashboardData.visuals.matrix.matrixData[0] || {}).map((col, idx) => (
+                          <th key={idx} className="p-2.5 font-mono text-zinc-300 whitespace-nowrap">
+                            {col}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#22252e] bg-[#181a20]">
+                      {dashboardData.visuals.matrix.matrixData.map((row, rIdx) => (
+                        <tr key={rIdx} className="hover:bg-[#20232b] transition">
+                          {Object.keys(dashboardData.visuals.matrix.matrixData[0] || {}).map((col, cIdx) => (
+                            <td key={cIdx} className="p-2.5 text-zinc-300 font-mono text-[11px] whitespace-nowrap">
+                              {row[col] !== undefined && row[col] !== null ? String(row[col]) : '-'}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
@@ -522,10 +717,10 @@ export default function PowerBIViewer({ onNavigate }) {
                 <div>
                   <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
                     <Database className="w-4 h-4 text-amber-400" />
-                    <span>SQL Query Result Matrix</span>
+                    <span>Detailed Records Grid</span>
                   </h3>
                   <p className="text-xs text-zinc-400">
-                    Showing {filteredRows.length} of {dashboardData.totalRows} records
+                    Showing {slicedRows.length} of {dashboardData.totalRows} records
                   </p>
                 </div>
 
@@ -566,7 +761,7 @@ export default function PowerBIViewer({ onNavigate }) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#22252e] bg-[#181a20]">
-                    {filteredRows.map((row, rIdx) => (
+                    {slicedRows.map((row, rIdx) => (
                       <tr key={rIdx} className="hover:bg-[#20232b] transition">
                         {dashboardData.columns.map((col, cIdx) => (
                           <td key={cIdx} className="p-3 text-zinc-300 font-mono whitespace-nowrap text-[11px]">

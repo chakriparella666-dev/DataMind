@@ -1,7 +1,7 @@
 /**
  * Power BI Integration & SQL Query Dashboard Service
- * Executes generated SQL queries on PostgreSQL and transforms results into
- * rich Power BI-style BI visual analytics, KPIs, and Power Query M-scripts.
+ * Transforms raw SQL query results into rich, multi-visual Power BI Report Canvases
+ * with auto-aggregated metrics, categorical frequencies, cross-tab matrices, and interactive slicers.
  */
 
 const { appQuery, isPgConnected } = require('../config/db');
@@ -81,7 +81,7 @@ in
 }
 
 /**
- * Execute a generated SQL query and transform into Power BI Dashboard analytics
+ * Execute a generated SQL query and transform into rich Power BI Report Canvas
  */
 async function executeSqlQueryForPowerBI(sql, question = 'Custom SQL Query') {
   if (!isPgConnected()) {
@@ -109,7 +109,12 @@ async function executeSqlQueryForPowerBI(sql, question = 'Custom SQL Query') {
       columns: fields.map(f => ({ name: f, type: 'text' })),
       rows: [],
       kpis: [],
-      chartConfig: { chartType: 'bar', xAxisKey: fields[0] || '', yAxisKeys: [] },
+      visuals: {
+        primaryChart: { title: 'No Data', data: [], xKey: '', yKeys: [], type: 'bar' },
+        secondaryChart: { title: 'No Data', data: [], nameKey: '', valKey: '', type: 'donut' },
+        matrix: { rowKey: '', colKey: '', matrixData: [] },
+        slicers: {}
+      },
       powerQueryCode: generateQueryPowerQueryMCode(sql)
     };
   }
@@ -129,44 +134,190 @@ async function executeSqlQueryForPowerBI(sql, question = 'Custom SQL Query') {
   const numericCols = columns.filter(c => c.type === 'numeric').map(c => c.name);
   const textCols = columns.filter(c => c.type !== 'numeric').map(c => c.name);
 
-  // Compute KPI metric cards (SUM, AVG, MIN, MAX) for each numeric column
+  // 1. Build Slicer Metadata (Unique values for every categorical column)
+  const slicers = {};
+  textCols.forEach(col => {
+    const uniqueVals = Array.from(new Set(rows.map(r => r[col] !== null && r[col] !== undefined ? String(r[col]).trim() : 'Unknown'))).filter(Boolean);
+    if (uniqueVals.length > 0 && uniqueVals.length <= 100) {
+      slicers[col] = uniqueVals;
+    }
+  });
+
+  // 2. Build Power BI Executive KPI Cards
   const kpis = [];
   kpis.push({
-    label: 'Total Query Rows',
+    label: 'Total Query Records',
     value: totalRows.toLocaleString(),
-    subtitle: 'Returned in ' + executionTimeMs + 'ms',
+    subtitle: `Executed in ${executionTimeMs}ms`,
     type: 'count'
   });
 
-  for (const numCol of numericCols.slice(0, 4)) {
-    const vals = rows.map(r => Number(r[numCol])).filter(v => !isNaN(v) && v !== null);
-    if (vals.length > 0) {
-      const sum = vals.reduce((a, b) => a + b, 0);
-      const avg = sum / vals.length;
-      const min = Math.min(...vals);
-      const max = Math.max(...vals);
+  if (numericCols.length > 0) {
+    // Has numbers: compute SUM, AVG, MIN, MAX
+    for (const numCol of numericCols.slice(0, 3)) {
+      const vals = rows.map(r => Number(r[numCol])).filter(v => !isNaN(v) && v !== null);
+      if (vals.length > 0) {
+        const sum = vals.reduce((a, b) => a + b, 0);
+        const avg = sum / vals.length;
+        const min = Math.min(...vals);
+        const max = Math.max(...vals);
 
-      const isFloat = vals.some(v => v % 1 !== 0);
-      const formatNum = (n) => isFloat ? Number(n.toFixed(2)).toLocaleString() : Math.round(n).toLocaleString();
+        const isFloat = vals.some(v => v % 1 !== 0);
+        const formatNum = (n) => isFloat ? Number(n.toFixed(2)).toLocaleString() : Math.round(n).toLocaleString();
+
+        kpis.push({
+          label: `Total ${numCol.replace(/_/g, ' ').toUpperCase()}`,
+          value: formatNum(sum),
+          subtitle: `Avg: ${formatNum(avg)} | Max: ${formatNum(max)}`,
+          type: 'metric'
+        });
+      }
+    }
+  } else {
+    // Categorical only (like segment, country): compute distinct counts and dominant mode
+    textCols.slice(0, 3).forEach(col => {
+      const vals = rows.map(r => String(r[col] || '').trim()).filter(Boolean);
+      const uniqueCount = new Set(vals).size;
+      
+      // Compute most frequent category
+      const countMap = {};
+      vals.forEach(v => { countMap[v] = (countMap[v] || 0) + 1; });
+      let topCat = 'None';
+      let maxCnt = 0;
+      Object.entries(countMap).forEach(([k, v]) => {
+        if (v > maxCnt) { maxCnt = v; topCat = k; }
+      });
+      const topPct = totalRows > 0 ? Math.round((maxCnt / totalRows) * 100) : 0;
 
       kpis.push({
-        label: `Total ${numCol.replace(/_/g, ' ')}`,
-        value: formatNum(sum),
-        subtitle: `Avg: ${formatNum(avg)} | Min: ${formatNum(min)} | Max: ${formatNum(max)}`,
-        type: 'metric'
+        label: `Distinct ${col.replace(/_/g, ' ').toUpperCase()}`,
+        value: uniqueCount.toLocaleString(),
+        subtitle: `Top: ${topCat} (${topPct}%)`,
+        type: 'dimension'
       });
-    }
+    });
   }
 
-  // Determine smart chart axes
-  const xAxisKey = textCols[0] || colNames[0];
-  const yAxisKeys = numericCols.length > 0 ? numericCols : [];
+  // 3. Build Multi-Visual Power BI Canvas Data Structures
 
-  let chartType = 'bar';
-  if (xAxisKey && (xAxisKey.toLowerCase().includes('date') || xAxisKey.toLowerCase().includes('year') || xAxisKey.toLowerCase().includes('month') || xAxisKey.toLowerCase().includes('day') || xAxisKey.toLowerCase().includes('time'))) {
-    chartType = 'line';
-  } else if (rows.length <= 6 && yAxisKeys.length === 1) {
-    chartType = 'donut';
+  let primaryChart = { title: '', data: [], xKey: '', yKeys: [], type: 'bar' };
+  let secondaryChart = { title: '', data: [], nameKey: '', valKey: '', type: 'donut' };
+  let matrix = { rowKey: '', colKey: '', matrixData: [] };
+
+  if (numericCols.length > 0 && textCols.length > 0) {
+    // Case A: Mixed (Numeric + Categorical) -> Group by primary text column and sum numeric metrics
+    const primaryDim = textCols[0];
+    const secondaryDim = textCols[1] || textCols[0];
+    const metric = numericCols[0];
+
+    // Primary Visual: Bar chart of metric by primary dimension
+    const groupMap = {};
+    rows.forEach(r => {
+      const key = String(r[primaryDim] || 'Other').trim();
+      if (!groupMap[key]) groupMap[key] = { [primaryDim]: key };
+      numericCols.slice(0, 3).forEach(nc => {
+        const val = Number(r[nc]) || 0;
+        groupMap[key][nc] = (groupMap[key][nc] || 0) + val;
+      });
+    });
+    primaryChart = {
+      title: `${numericCols.join(' & ').replace(/_/g, ' ')} by ${primaryDim.replace(/_/g, ' ')}`,
+      data: Object.values(groupMap),
+      xKey: primaryDim,
+      yKeys: numericCols.slice(0, 3),
+      type: 'bar'
+    };
+
+    // Secondary Visual: Donut chart by secondary dimension (or primary)
+    const donutMap = {};
+    rows.forEach(r => {
+      const key = String(r[secondaryDim] || 'Other').trim();
+      donutMap[key] = (donutMap[key] || 0) + (Number(r[metric]) || 1);
+    });
+    secondaryChart = {
+      title: `${metric.replace(/_/g, ' ')} Share by ${secondaryDim.replace(/_/g, ' ')}`,
+      data: Object.entries(donutMap).map(([name, val]) => ({ name, value: Math.round(val * 100) / 100 })),
+      nameKey: 'name',
+      valKey: 'value',
+      type: 'donut'
+    };
+
+    // Matrix Cross-Tab (if 2+ dimensions exist)
+    if (textCols.length >= 2) {
+      const rDim = textCols[0];
+      const cDim = textCols[1];
+      const pivotMap = {};
+      rows.forEach(r => {
+        const rVal = String(r[rDim] || 'Other').trim();
+        const cVal = String(r[cDim] || 'Other').trim();
+        if (!pivotMap[rVal]) pivotMap[rVal] = { [rDim]: rVal };
+        pivotMap[rVal][cVal] = (pivotMap[rVal][cVal] || 0) + (Number(r[metric]) || 1);
+      });
+      matrix = {
+        rowKey: rDim,
+        colKey: cDim,
+        matrixData: Object.values(pivotMap)
+      };
+    }
+  } else if (textCols.length > 0) {
+    // Case B: Pure Categorical (e.g. segment, country) -> Compute Frequency Distributions
+    const primaryDim = textCols[0];
+    const secondaryDim = textCols[1] || textCols[0];
+
+    // Primary Visual: Frequency Bar Chart for Dimension 1
+    const freq1 = {};
+    rows.forEach(r => {
+      const key = String(r[primaryDim] || 'Unknown').trim();
+      freq1[key] = (freq1[key] || 0) + 1;
+    });
+    primaryChart = {
+      title: `Record Volume by ${primaryDim.replace(/_/g, ' ').toUpperCase()}`,
+      data: Object.entries(freq1).map(([k, v]) => ({ [primaryDim]: k, 'Record Count': v })),
+      xKey: primaryDim,
+      yKeys: ['Record Count'],
+      type: 'bar'
+    };
+
+    // Secondary Visual: Frequency Donut Chart for Dimension 2
+    const freq2 = {};
+    rows.forEach(r => {
+      const key = String(r[secondaryDim] || 'Unknown').trim();
+      freq2[key] = (freq2[key] || 0) + 1;
+    });
+    secondaryChart = {
+      title: `Distribution by ${secondaryDim.replace(/_/g, ' ').toUpperCase()}`,
+      data: Object.entries(freq2).map(([name, value]) => ({ name, value })),
+      nameKey: 'name',
+      valKey: 'value',
+      type: 'donut'
+    };
+
+    // Matrix Cross-Tab Frequency (if 2+ dimensions)
+    if (textCols.length >= 2) {
+      const rDim = textCols[0];
+      const cDim = textCols[1];
+      const pivotMap = {};
+      rows.forEach(r => {
+        const rVal = String(r[rDim] || 'Unknown').trim();
+        const cVal = String(r[cDim] || 'Unknown').trim();
+        if (!pivotMap[rVal]) pivotMap[rVal] = { [rDim]: rVal };
+        pivotMap[rVal][cVal] = (pivotMap[rVal][cVal] || 0) + 1;
+      });
+      matrix = {
+        rowKey: rDim,
+        colKey: cDim,
+        matrixData: Object.values(pivotMap)
+      };
+    }
+  } else {
+    // Case C: Pure Numeric
+    primaryChart = {
+      title: 'Metrics Distribution',
+      data: rows.map((r, i) => ({ Index: `Row ${i + 1}`, ...r })),
+      xKey: 'Index',
+      yKeys: numericCols.slice(0, 4),
+      type: 'bar'
+    };
   }
 
   return {
@@ -177,11 +328,11 @@ async function executeSqlQueryForPowerBI(sql, question = 'Custom SQL Query') {
     columns,
     rows,
     kpis,
-    chartConfig: {
-      chartType,
-      xAxisKey,
-      yAxisKeys,
-      title: `${question || 'SQL Query Results'}`
+    visuals: {
+      primaryChart,
+      secondaryChart,
+      matrix,
+      slicers
     },
     powerQueryCode: generateQueryPowerQueryMCode(sql)
   };
