@@ -1,14 +1,16 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Download, Copy, CheckCheck, RefreshCw, Database, BarChart2,
   Sparkles, Layers, Check, AlertCircle, Code, Filter,
   FileSpreadsheet, Play, Activity, Search,
-  ChevronRight, Terminal, PieChart, TrendingUp, BarChart3, X,
-  Grid, SlidersHorizontal, Settings2, RotateCcw
+  ChevronRight, ChevronDown, Terminal, PieChart as PieIcon, TrendingUp, BarChart3, X,
+  Grid, SlidersHorizontal, Settings2, RotateCcw, ArrowLeft, Maximize2,
+  Hash, Calendar, Type, Eye, Table as TableIcon, FileText, Zap, ChevronUp
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart as RechartsPie,
-  Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+  Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  ComposedChart
 } from 'recharts';
 import {
   getPowerBIQueries,
@@ -22,6 +24,9 @@ const PALETTE = [
 ];
 
 export default function PowerBIViewer({ initialQuery, onNavigate }) {
+  // Page Tab state (like Power BI Desktop Page 1, Page 2, Page 3)
+  const [activeCanvasPage, setActiveCanvasPage] = useState('page1'); // 'page1' (Executive), 'page2' (Analytics), 'page3' (Data Grid)
+
   // Queries & Active Dashboard State
   const [queriesList, setQueriesList] = useState([]);
   const [activeQuery, setActiveQuery] = useState(null);
@@ -33,15 +38,18 @@ export default function PowerBIViewer({ initialQuery, onNavigate }) {
   const [loadingDashboard, setLoadingDashboard] = useState(false);
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
-  const [activeChartType, setActiveChartType] = useState('bar'); // 'bar' | 'line' | 'area'
+  const [activeChartType, setActiveChartType] = useState('bar'); // 'bar' | 'column' | 'line' | 'area' | 'composed' | 'donut'
   const [selectedSlicers, setSelectedSlicers] = useState({}); // { [colName]: selectedVal }
   const [filterText, setFilterText] = useState('');
+  const [activeRibbonTab, setActiveRibbonTab] = useState('home'); // 'home' | 'visuals' | 'modeling' | 'view'
 
   // Visual Customizer Field Wells (X-Axis, Y-Axis, Aggregation Method)
   const [customXAxis, setCustomXAxis] = useState('');
   const [customYAxis, setCustomYAxis] = useState([]); // array of selected metric names
   const [aggFunction, setAggFunction] = useState('SUM'); // 'SUM' | 'AVG' | 'COUNT' | 'MAX' | 'MIN'
-  const [showFieldCustomizer, setShowFieldCustomizer] = useState(false);
+  const [showRightPane, setShowRightPane] = useState(true); // Power BI Right Sidebar (Visualizations & Fields)
+  const [rightPaneTab, setRightPaneTab] = useState('visuals'); // 'visuals' | 'fields' | 'filters'
+  const [showDataLabels, setShowDataLabels] = useState(true);
 
   // Custom Query Bar State
   const [customSql, setCustomSql] = useState('');
@@ -380,18 +388,6 @@ export default function PowerBIViewer({ initialQuery, onNavigate }) {
     link.click();
   };
 
-  // Reset to smart best defaults
-  const handleResetBestAxis = () => {
-    if (!dashboardData?.columns) return;
-    const cols = dashboardData.columns;
-    const textCols = cols.filter(c => c.type !== 'numeric').map(c => c.name);
-    const numCols = cols.filter(c => c.type === 'numeric').map(c => c.name);
-
-    setCustomXAxis(textCols[0] || cols[0]?.name || '');
-    setCustomYAxis(numCols.length > 0 ? numCols.slice(0, 2) : ['Record Count']);
-    setAggFunction('SUM');
-  };
-
   // Generate DAX with Copilot for active SQL columns
   const handleGenerateDax = (e) => {
     e.preventDefault();
@@ -438,263 +434,143 @@ export default function PowerBIViewer({ initialQuery, onNavigate }) {
   };
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-[#111318] text-slate-100 font-sans antialiased overflow-hidden select-none">
+    <div className="flex-1 flex flex-col h-full bg-[#111317] text-slate-100 font-sans antialiased overflow-hidden select-none">
       
-      {/* Top Header & 1-Click Automation Bar */}
-      <div className="bg-[#181a20] border-b border-[#2a2d36] px-5 py-3.5 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-md">
+      {/* Power BI Signature Top Studio Ribbon Bar */}
+      <div className="bg-[#181a20] border-b border-[#252830] shrink-0">
         
-        {/* Left: Query Result Header */}
-        <div className="flex items-center space-x-3 min-w-0">
-          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0 shadow-sm">
-            <BarChart2 className="w-5 h-5 text-amber-400" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center space-x-2">
-              <h2 className="text-base font-extrabold text-white tracking-tight truncate max-w-md">
-                {dashboardData?.question || activeQuery?.title || 'Power BI SQL Query Dashboard'}
-              </h2>
-              <span className="px-2 py-0.5 bg-amber-500/15 border border-amber-500/40 text-amber-300 text-[10px] font-black rounded-md uppercase tracking-wider">
-                Live BI Canvas
-              </span>
+        {/* Ribbon Header Brand Row */}
+        <div className="px-4 py-2 flex items-center justify-between border-b border-[#23252d]">
+          <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2 bg-gradient-to-r from-amber-500 to-amber-600 px-2.5 py-1 rounded-lg text-black font-black text-xs shadow-md">
+              <BarChart2 className="w-4 h-4 fill-black" />
+              <span className="tracking-tight">Power BI Studio</span>
             </div>
-            <p className="text-xs text-zinc-400 truncate">
-              {dashboardData ? `${slicedRows.length} of ${dashboardData.totalRows} records displayed (${dashboardData.executionTimeMs}ms query)` : 'Automated Power BI Dashboard from generated SQL'}
-            </p>
+            <div className="h-4 w-[1px] bg-zinc-700 hidden sm:block"></div>
+            <h1 className="text-xs font-bold text-white tracking-wide truncate max-w-sm hidden sm:block">
+              {dashboardData?.question || activeQuery?.title || 'Live Executive Report Canvas'}
+            </h1>
           </div>
-        </div>
 
-        {/* Right: 1-Click Power BI Export & Automation Actions */}
-        <div className="flex items-center space-x-2 shrink-0">
-          
-          {/* Visual Customizer Button */}
-          <button
-            onClick={() => setShowFieldCustomizer(!showFieldCustomizer)}
-            className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer shadow-sm ${
-              showFieldCustomizer
-                ? 'bg-indigo-600 text-white font-extrabold'
-                : 'bg-[#22242c] hover:bg-[#2b2e38] text-indigo-300 border border-indigo-500/40'
-            }`}
-            title="Customize X-Axis, Y-Axis Metrics & Aggregation"
-          >
-            <Settings2 className="w-3.5 h-3.5" />
-            <span>Customize Visuals</span>
-          </button>
-
-          {/* ⚡ Power BI REST API Settings */}
-          <button
-            onClick={() => setShowApiModal(true)}
-            className="px-3 py-2 bg-[#22242c] hover:bg-[#2b2e38] text-amber-300 border border-amber-500/30 font-bold text-xs rounded-xl flex items-center space-x-1.5 transition cursor-pointer"
-            title="Configure Power BI REST API, Workspace & Embed Token"
-          >
-            <Activity className="w-3.5 h-3.5 text-amber-400" />
-            <span>Power BI API</span>
-          </button>
-
-          {/* ⚡ 1-Click Open in Power BI Desktop */}
-          <button
-            onClick={handleDownloadPbids}
-            className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black text-xs rounded-xl flex items-center space-x-1.5 shadow-md active:scale-[0.98] transition cursor-pointer"
-            title="Download Power BI Desktop Data Source (.pbids)"
-          >
-            <Download className="w-4 h-4" />
-            <span>⚡ 1-Click Power BI</span>
-          </button>
-
-          {/* Power Query M-Code for this Query */}
-          <button
-            onClick={() => setShowMCodeModal(true)}
-            className="px-3 py-2 bg-[#22242c] hover:bg-[#2b2e38] text-zinc-200 border border-[#343844] font-bold text-xs rounded-xl flex items-center space-x-1.5 transition cursor-pointer"
-            title="View Power Query M-Script for this SQL Query"
-          >
-            <Code className="w-3.5 h-3.5 text-amber-400" />
-            <span>Power Query M</span>
-          </button>
-
-          {/* DAX Copilot */}
-          <button
-            onClick={() => setIsCopilotOpen(!isCopilotOpen)}
-            className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer ${
-              isCopilotOpen
-                ? 'bg-amber-400 text-black font-extrabold'
-                : 'bg-[#22242c] hover:bg-[#2b2e38] text-amber-300 border border-amber-500/30'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>DAX Copilot</span>
-          </button>
-
-          {/* Refresh Query */}
-          <button
-            onClick={() => runQueryDashboard(customSql || activeQuery?.sql, customQuestion || activeQuery?.question)}
-            className="p-2 bg-[#22242c] hover:bg-[#2b2e38] text-zinc-300 hover:text-white border border-[#343844] rounded-xl transition cursor-pointer"
-            title="Re-execute SQL query"
-          >
-            <RefreshCw className={`w-4 h-4 ${loadingDashboard ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
-      </div>
-
-      {/* Generated SQL Queries Horizontal Carousel */}
-      <div className="bg-[#15171d] border-b border-[#252832] px-5 py-2.5 flex items-center space-x-2 overflow-x-auto no-scrollbar shrink-0">
-        <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider shrink-0 mr-1 flex items-center gap-1">
-          <Layers className="w-3 h-3 text-zinc-400" /> Generated SQL Queries:
-        </span>
-        
-        {queriesList.map((q) => {
-          const isSelected = activeQuery && String(activeQuery.id || activeQuery._id) === String(q.id || q._id);
-          const displayTitle = q.question || q.name || 'SQL Query';
-          return (
+          {/* Quick Action Ribbon Controls */}
+          <div className="flex items-center space-x-1.5">
+            {/* ⚡ 1-Click Power BI Desktop */}
             <button
-              key={q.id || q._id}
-              onClick={() => handleSelectSavedQuery(q)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition shrink-0 max-w-xs truncate ${
-                isSelected
-                  ? 'bg-amber-500 text-black font-extrabold shadow-sm'
-                  : 'bg-[#1e2028] text-zinc-300 hover:text-white hover:bg-[#262a36] border border-[#2c303c]'
-              }`}
-              title={displayTitle}
+              onClick={handleDownloadPbids}
+              className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black text-xs rounded-lg flex items-center space-x-1.5 shadow-sm active:scale-95 transition cursor-pointer"
+              title="Download Power BI Desktop DirectQuery File (.pbids)"
             >
-              {displayTitle}
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">1-Click Power BI</span>
             </button>
-          );
-        })}
 
-        {/* Toggle Custom SQL Input */}
-        <button
-          onClick={() => setIsEditingSql(!isEditingSql)}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition shrink-0 flex items-center gap-1 border ${
-            isEditingSql
-              ? 'bg-indigo-600 text-white border-indigo-500'
-              : 'bg-[#1a1c24] text-indigo-400 border-indigo-500/40 hover:bg-indigo-500/10'
-          }`}
-        >
-          <Terminal className="w-3 h-3" />
-          <span>{isEditingSql ? 'Hide SQL Bar' : 'Custom SQL'}</span>
-        </button>
-      </div>
+            {/* Power Query M */}
+            <button
+              onClick={() => setShowMCodeModal(true)}
+              className="px-2.5 py-1.5 bg-[#22252e] hover:bg-[#2c303c] text-zinc-200 border border-[#343844] font-bold text-xs rounded-lg flex items-center space-x-1 transition cursor-pointer"
+              title="View Power Query M-Script"
+            >
+              <Code className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden md:inline">M-Code</span>
+            </button>
 
-      {/* Visual Customizer Panel (X-Axis, Y-Axis, Aggregation Method) */}
-      {showFieldCustomizer && dashboardData?.columns && (
-        <div className="bg-[#181a24] border-b border-[#2e323c] p-4 flex flex-wrap items-center gap-4 text-xs animate-fadeIn shrink-0 shadow-inner">
+            {/* Power BI REST API */}
+            <button
+              onClick={() => setShowApiModal(true)}
+              className="px-2.5 py-1.5 bg-[#22252e] hover:bg-[#2c303c] text-amber-300 border border-amber-500/40 font-bold text-xs rounded-lg flex items-center space-x-1 transition cursor-pointer"
+              title="Power BI REST API & Azure Settings"
+            >
+              <Activity className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden md:inline">API Config</span>
+            </button>
+
+            {/* DAX Copilot */}
+            <button
+              onClick={() => setIsCopilotOpen(!isCopilotOpen)}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center space-x-1 cursor-pointer ${
+                isCopilotOpen ? 'bg-amber-400 text-black font-black' : 'bg-[#22252e] text-amber-300 border border-amber-500/30'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden md:inline">DAX AI</span>
+            </button>
+
+            {/* Refresh */}
+            <button
+              onClick={() => runQueryDashboard(customSql || activeQuery?.sql, customQuestion || activeQuery?.question)}
+              className="p-1.5 bg-[#22252e] hover:bg-[#2c303c] text-zinc-300 hover:text-white border border-[#343844] rounded-lg transition cursor-pointer"
+              title="Re-execute Live Query"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loadingDashboard ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+        </div>
+
+        {/* Ribbon Command Sub-Bar (Generated Queries + Customizer Trigger) */}
+        <div className="px-4 py-2 flex items-center justify-between gap-3 overflow-x-auto no-scrollbar text-xs">
           
-          {/* X-Axis Dimension */}
-          <div className="flex items-center space-x-2">
-            <span className="font-extrabold text-amber-300 uppercase tracking-wider text-[11px]">X-Axis Dimension:</span>
-            <select
-              value={customXAxis}
-              onChange={(e) => setCustomXAxis(e.target.value)}
-              className="bg-[#101216] border border-[#343844] rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-amber-400 font-medium"
+          {/* Query Pills Carousel */}
+          <div className="flex items-center space-x-1.5 shrink-0 overflow-x-auto no-scrollbar">
+            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1 shrink-0">
+              <Layers className="w-3 h-3 text-amber-400" /> Reports:
+            </span>
+            {queriesList.map((q) => {
+              const isSelected = activeQuery && String(activeQuery.id || activeQuery._id) === String(q.id || q._id);
+              const displayTitle = q.question || q.name || 'SQL Query';
+              return (
+                <button
+                  key={q.id || q._id}
+                  onClick={() => handleSelectSavedQuery(q)}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold cursor-pointer transition shrink-0 max-w-xs truncate ${
+                    isSelected
+                      ? 'bg-amber-500 text-black font-extrabold shadow-sm'
+                      : 'bg-[#20232a] text-zinc-300 hover:text-white hover:bg-[#2a2e38] border border-[#2c303a]'
+                  }`}
+                  title={displayTitle}
+                >
+                  {displayTitle}
+                </button>
+              );
+            })}
+
+            <button
+              onClick={() => setIsEditingSql(!isEditingSql)}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition shrink-0 flex items-center gap-1 border ${
+                isEditingSql ? 'bg-indigo-600 text-white border-indigo-500' : 'bg-[#1e2029] text-indigo-400 border-indigo-500/40'
+              }`}
             >
-              {dashboardData.columns.map(col => (
-                <option key={col.name} value={col.name}>
-                  {col.name} ({col.type})
-                </option>
-              ))}
-            </select>
+              <Terminal className="w-3 h-3" />
+              <span>{isEditingSql ? 'Close SQL' : 'Custom SQL'}</span>
+            </button>
           </div>
 
-          {/* Y-Axis Metrics */}
-          <div className="flex items-center space-x-2">
-            <span className="font-extrabold text-indigo-300 uppercase tracking-wider text-[11px]">Y-Axis Metric(s):</span>
-            <div className="flex items-center space-x-1.5 bg-[#101216] border border-[#343844] rounded-lg p-1">
-              <button
-                onClick={() => {
-                  setCustomYAxis(['Record Count']);
-                }}
-                className={`px-2 py-0.5 rounded text-[11px] font-bold transition ${
-                  customYAxis.includes('Record Count') ? 'bg-indigo-500 text-white' : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                Record Count
-              </button>
-
-              {dashboardData.columns.filter(c => c.type === 'numeric').map(c => {
-                const isSelected = customYAxis.includes(c.name);
-                return (
-                  <button
-                    key={c.name}
-                    onClick={() => {
-                      setCustomYAxis(prev => {
-                        const clean = prev.filter(y => y !== 'Record Count');
-                        if (clean.includes(c.name)) {
-                          const next = clean.filter(y => y !== c.name);
-                          return next.length > 0 ? next : ['Record Count'];
-                        }
-                        return [...clean, c.name];
-                      });
-                    }}
-                    className={`px-2 py-0.5 rounded text-[11px] font-bold transition ${
-                      isSelected ? 'bg-amber-500 text-black' : 'text-zinc-400 hover:text-white'
-                    }`}
-                  >
-                    {c.name}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Aggregation Function */}
-          <div className="flex items-center space-x-2">
-            <span className="font-extrabold text-emerald-300 uppercase tracking-wider text-[11px]">Calculation:</span>
-            <select
-              value={aggFunction}
-              onChange={(e) => setAggFunction(e.target.value)}
-              className="bg-[#101216] border border-[#343844] rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-emerald-400 font-bold"
-            >
-              <option value="SUM">SUM (Total)</option>
-              <option value="AVG">AVERAGE (Mean)</option>
-              <option value="COUNT">COUNT (Frequency)</option>
-              <option value="MAX">MAX (Maximum)</option>
-              <option value="MIN">MIN (Minimum)</option>
-            </select>
-          </div>
-
-          {/* Reset Best Axis Button */}
+          {/* Toggle Visualizations / Fields Sidebar */}
           <button
-            onClick={() => {
-              if (dashboardData?.columns) {
-                const auto = computeBestAxes(dashboardData.columns);
-                setCustomXAxis(auto.x);
-                setCustomYAxis(auto.y);
-                setAggFunction(auto.agg);
-                setAutoAxesReason(auto.reason);
-              }
-            }}
-            className="px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition ml-auto shadow-sm"
-            title="Auto-detect optimal X-axis dimension, metric(s) and aggregation for this dataset"
+            onClick={() => setShowRightPane(!showRightPane)}
+            className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition shrink-0 flex items-center gap-1 border ${
+              showRightPane ? 'bg-[#2a2e3a] text-amber-300 border-amber-500/50' : 'bg-[#1e2029] text-zinc-400 border-[#2f333f]'
+            }`}
           >
-            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-            <span>⚡ Apply Best Axes</span>
+            <Settings2 className="w-3 h-3" />
+            <span>{showRightPane ? 'Hide Build Pane' : 'Show Build Pane'}</span>
           </button>
         </div>
-      )}
+      </div>
 
-      {/* Auto Axes Reason Notification Banner */}
-      {autoAxesReason && (
-        <div className="bg-[#14161f] border-b border-[#242736] px-5 py-1.5 flex items-center justify-between text-[11px] text-zinc-400 shrink-0">
-          <div className="flex items-center space-x-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-            <span className="text-zinc-300 font-medium">{autoAxesReason}</span>
-          </div>
-          <span className="text-[10px] text-zinc-500 font-mono">X: {customXAxis} | Y: {customYAxis.join(', ')} ({aggFunction})</span>
-        </div>
-      )}
-
-      {/* Custom SQL Query Editor Drawer */}
+      {/* Custom SQL Drawer */}
       {isEditingSql && (
         <form onSubmit={handleRunCustomQuery} className="bg-[#181a22] border-b border-[#2e323c] p-4 flex flex-col md:flex-row gap-3 animate-fadeIn shrink-0">
           <div className="flex-1 space-y-2">
             <input
               type="text"
-              placeholder="Query title / question (e.g. Sales by region)"
+              placeholder="Report question (e.g. Total Sales and Profit by Segment)"
               value={customQuestion}
               onChange={(e) => setCustomQuestion(e.target.value)}
               className="w-full bg-[#101216] border border-[#343844] rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-400"
             />
             <textarea
               rows={2}
-              placeholder="Enter custom SQL query (e.g. SELECT department, AVG(salary) FROM tbl_sheet1_604870 GROUP BY department)"
+              placeholder="SELECT segment, SUM(gross_sales), SUM(profit) FROM tbl_sheet1_604870 GROUP BY segment"
               value={customSql}
               onChange={(e) => setCustomSql(e.target.value)}
               className="w-full bg-[#101216] border border-[#343844] rounded-lg p-2 text-xs font-mono text-emerald-400 placeholder-zinc-500 focus:outline-none focus:border-amber-400 resize-none"
@@ -707,32 +583,32 @@ export default function PowerBIViewer({ initialQuery, onNavigate }) {
               className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs rounded-xl flex items-center justify-center space-x-1.5 transition cursor-pointer shadow-sm disabled:opacity-50"
             >
               <Play className="w-3.5 h-3.5 fill-black" />
-              <span>Generate Dashboard</span>
+              <span>Render Report</span>
             </button>
           </div>
         </form>
       )}
 
-      {/* Interactive Slicers Bar */}
+      {/* Slicers Bar */}
       {dashboardData?.visuals?.slicers && Object.keys(dashboardData.visuals.slicers).length > 0 && (
-        <div className="bg-[#13151a] border-b border-[#22252e] px-5 py-2 flex items-center space-x-3 overflow-x-auto no-scrollbar shrink-0 text-xs">
-          <span className="font-bold text-zinc-400 flex items-center gap-1 uppercase tracking-wider text-[11px] shrink-0">
+        <div className="bg-[#14161d] border-b border-[#22252e] px-4 py-2 flex items-center space-x-3 overflow-x-auto no-scrollbar shrink-0 text-xs">
+          <span className="font-bold text-zinc-400 flex items-center gap-1 uppercase tracking-wider text-[10px] shrink-0">
             <SlidersHorizontal className="w-3 h-3 text-amber-400" /> Slicers:
           </span>
           {Object.entries(dashboardData.visuals.slicers).map(([colName, vals]) => (
-            <div key={colName} className="flex items-center space-x-1.5 bg-[#1a1c24] border border-[#2c303c] rounded-lg px-2 py-1 shrink-0">
-              <span className="text-zinc-400 font-bold text-[11px]">{colName}:</span>
+            <div key={colName} className="flex items-center space-x-1 bg-[#1a1d26] border border-[#2b2f3c] rounded-lg px-2 py-0.5 shrink-0">
+              <span className="text-zinc-400 font-bold text-[10px]">{colName}:</span>
               <div className="flex items-center space-x-1">
-                {vals.slice(0, 5).map(val => {
+                {vals.slice(0, 6).map(val => {
                   const isSelected = selectedSlicers[colName] === val;
                   return (
                     <button
                       key={val}
                       onClick={() => handleToggleSlicer(colName, val)}
-                      className={`px-2 py-0.5 rounded text-[11px] font-medium transition ${
+                      className={`px-2 py-0.5 rounded text-[10px] font-semibold transition ${
                         isSelected
-                          ? 'bg-amber-500 text-black font-bold'
-                          : 'bg-[#22252e] text-zinc-300 hover:text-white hover:bg-[#2b2f3a]'
+                          ? 'bg-amber-500 text-black font-extrabold'
+                          : 'bg-[#222632] text-zinc-300 hover:text-white hover:bg-[#2b3040]'
                       }`}
                     >
                       {val}
@@ -745,290 +621,476 @@ export default function PowerBIViewer({ initialQuery, onNavigate }) {
           {Object.keys(selectedSlicers).length > 0 && (
             <button
               onClick={() => setSelectedSlicers({})}
-              className="text-[11px] text-amber-400 hover:underline font-bold shrink-0 ml-1"
+              className="text-[10px] text-amber-400 hover:underline font-bold shrink-0 ml-1 cursor-pointer"
             >
-              Clear Slicers
+              Clear All Slicers
             </button>
           )}
         </div>
       )}
 
-      {/* Alerts */}
-      {error && (
-        <div className="m-4 p-3.5 bg-rose-950/70 border border-rose-700/80 rounded-xl text-rose-200 text-xs flex items-center justify-between shadow-lg">
-          <div className="flex items-center space-x-2">
-            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-            <span>{error}</span>
-          </div>
-          <button onClick={() => setError(null)} className="text-rose-400 hover:text-white">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
-      {/* Main Power BI Visual Canvas */}
+      {/* Main Workspace (Canvas on Left + Power BI Visual & Field Pane on Right) */}
       <div className="flex-1 flex min-h-0 relative overflow-hidden bg-[#0d0e12]">
         
-        {loadingDashboard ? (
-          <div className="flex-1 flex flex-col items-center justify-center space-y-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center animate-spin">
-              <RefreshCw className="w-5 h-5 text-amber-400" />
-            </div>
-            <p className="text-xs font-bold text-zinc-300">Generating interactive Power BI Report Canvas from SQL...</p>
-          </div>
-        ) : !dashboardData ? (
-          <div className="flex-1 flex items-center justify-center text-zinc-500 text-xs">
-            Select a SQL query above to generate its Power BI dashboard.
-          </div>
-        ) : (
-          <div className="flex-1 flex flex-col h-full overflow-y-auto p-5 md:p-6 space-y-6">
-            
-            {/* KPI Cards (Power BI Metric Tiles) */}
-            {dashboardData.kpis && dashboardData.kpis.length > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {dashboardData.kpis.map((kpi, idx) => (
-                  <div key={idx} className="bg-[#181a20] border border-[#2a2d36] rounded-2xl p-4 shadow-md space-y-1">
-                    <div className="text-zinc-400 text-xs font-semibold truncate" title={kpi.label}>
-                      {kpi.label}
-                    </div>
-                    <div className="text-xl md:text-2xl font-black text-amber-400 font-mono">
-                      {kpi.value}
-                    </div>
-                    <p className="text-[10px] text-zinc-500 truncate" title={kpi.subtitle}>
-                      {kpi.subtitle}
-                    </p>
-                  </div>
-                ))}
+        {/* Left: Interactive Power BI Report Canvas */}
+        <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
+          
+          {/* Main Visual Content Viewport */}
+          <div className="flex-1 overflow-y-auto p-4 md:p-5 space-y-5">
+            {loadingDashboard ? (
+              <div className="h-full flex flex-col items-center justify-center space-y-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center animate-spin">
+                  <RefreshCw className="w-5 h-5 text-amber-400" />
+                </div>
+                <p className="text-xs font-bold text-zinc-300">Rendering live Power BI visuals...</p>
               </div>
-            )}
-
-            {/* Multi-Visual Power BI Layout: Visual 1 (Bar/Line) + Visual 2 (Donut) */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              
-              {/* Visual 1: Primary Aggregated Chart with Custom Axis & Metrics */}
-              <div className="lg:col-span-2 bg-[#181a20] border border-[#2a2d36] rounded-2xl p-5 shadow-md space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#262832] pb-3">
-                  <div>
-                    <h3 className="text-sm font-extrabold text-white">
-                      {dynamicVisuals.title || 'Primary Visual Analytics'}
-                    </h3>
-                    <p className="text-xs text-zinc-400">
-                      Dimension: <code className="text-amber-300 font-mono font-bold">{dynamicVisuals.xKey || 'X-Axis'}</code> | Metrics: <code className="text-indigo-300 font-mono">{dynamicVisuals.yKeys?.join(', ')}</code>
-                    </p>
-                  </div>
-
-                  {/* Chart Type Tabs */}
-                  <div className="flex items-center bg-[#101216] border border-[#2a2d36] rounded-xl p-1 space-x-1">
-                    <button
-                      onClick={() => setActiveChartType('bar')}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition ${
-                        activeChartType === 'bar' ? 'bg-amber-500 text-black font-extrabold' : 'text-zinc-400 hover:text-white'
-                      }`}
-                    >
-                      <BarChart3 className="w-3.5 h-3.5" />
-                      <span>Bar</span>
-                    </button>
-                    <button
-                      onClick={() => setActiveChartType('line')}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition ${
-                        activeChartType === 'line' ? 'bg-amber-500 text-black font-extrabold' : 'text-zinc-400 hover:text-white'
-                      }`}
-                    >
-                      <TrendingUp className="w-3.5 h-3.5" />
-                      <span>Line</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="w-full h-72 md:h-80 pt-2">
-                  <ResponsiveContainer width="100%" height="100%">
-                    {activeChartType === 'line' ? (
-                      <LineChart data={dynamicVisuals.primaryData} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#262a34" />
-                        <XAxis dataKey={dynamicVisuals.xKey} stroke="#71717a" fontSize={11} tickLine={false} />
-                        <YAxis stroke="#71717a" fontSize={11} tickLine={false} />
-                        <Tooltip contentStyle={{ backgroundColor: '#181a20', borderColor: '#343844', borderRadius: '12px', fontSize: '12px' }} />
-                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                        {dynamicVisuals.yKeys?.map((k, i) => (
-                          <Line key={k} type="monotone" dataKey={k} stroke={PALETTE[i % PALETTE.length]} strokeWidth={2.5} dot={{ r: 3 }} />
-                        ))}
-                      </LineChart>
-                    ) : (
-                      <BarChart data={dynamicVisuals.primaryData} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#262a34" />
-                        <XAxis dataKey={dynamicVisuals.xKey} stroke="#71717a" fontSize={11} tickLine={false} />
-                        <YAxis stroke="#71717a" fontSize={11} tickLine={false} />
-                        <Tooltip contentStyle={{ backgroundColor: '#181a20', borderColor: '#343844', borderRadius: '12px', fontSize: '12px' }} />
-                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                        {dynamicVisuals.yKeys?.map((k, i) => (
-                          <Bar key={k} dataKey={k} fill={PALETTE[i % PALETTE.length]} radius={[6, 6, 0, 0]} />
-                        ))}
-                      </BarChart>
-                    )}
-                  </ResponsiveContainer>
-                </div>
+            ) : !dashboardData ? (
+              <div className="h-full flex items-center justify-center text-zinc-500 text-xs">
+                Select a report query to view interactive Power BI dashboard.
               </div>
-
-              {/* Visual 2: Secondary Donut Share */}
-              <div className="bg-[#181a20] border border-[#2a2d36] rounded-2xl p-5 shadow-md space-y-4 flex flex-col justify-between">
-                <div className="border-b border-[#262832] pb-3">
-                  <h3 className="text-sm font-extrabold text-white">
-                    {dynamicVisuals.donutTitle || 'Dimensional Distribution'}
-                  </h3>
-                  <p className="text-xs text-zinc-400">Share breakdown</p>
-                </div>
-
-                <div className="w-full h-64 md:h-72">
-                  {dynamicVisuals.donutData && dynamicVisuals.donutData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <RechartsPie>
-                        <Pie
-                          data={dynamicVisuals.donutData}
-                          dataKey="value"
-                          nameKey="name"
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={55}
-                          outerRadius={85}
-                          paddingAngle={3}
-                        >
-                          {dynamicVisuals.donutData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={PALETTE[index % PALETTE.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip contentStyle={{ backgroundColor: '#181a20', borderColor: '#343844', borderRadius: '12px', fontSize: '12px' }} />
-                        <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '8px' }} />
-                      </RechartsPie>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="h-full flex items-center justify-center text-zinc-500 text-xs">
-                      Single dimension dataset
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Visual 3: Cross-Tab Matrix (Pivot Breakdown) */}
-            {dashboardData.visuals?.matrix?.matrixData && dashboardData.visuals.matrix.matrixData.length > 0 && (
-              <div className="bg-[#181a20] border border-[#2a2d36] rounded-2xl p-5 shadow-md space-y-3">
-                <div className="flex items-center justify-between border-b border-[#262832] pb-3">
-                  <div>
-                    <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
-                      <Grid className="w-4 h-4 text-amber-400" />
-                      <span>Power BI Matrix Breakdown</span>
-                    </h3>
-                    <p className="text-xs text-zinc-400">
-                      Cross-tabulation: <span className="text-amber-300 font-bold">{dashboardData.visuals.matrix.rowKey}</span> &times; <span className="text-indigo-300 font-bold">{dashboardData.visuals.matrix.colKey}</span>
-                    </p>
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto border border-[#2e323c] rounded-xl max-h-60">
-                  <table className="w-full text-left text-xs border-collapse font-sans">
-                    <thead className="bg-[#14161c] text-zinc-300 font-bold border-b border-[#2e323c] sticky top-0">
-                      <tr>
-                        {Object.keys(dashboardData.visuals.matrix.matrixData[0] || {}).map((col, idx) => (
-                          <th key={idx} className="p-2.5 font-mono text-zinc-300 whitespace-nowrap">
-                            {col}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#22252e] bg-[#181a20]">
-                      {dashboardData.visuals.matrix.matrixData.map((row, rIdx) => (
-                        <tr key={rIdx} className="hover:bg-[#20232b] transition">
-                          {Object.keys(dashboardData.visuals.matrix.matrixData[0] || {}).map((col, cIdx) => (
-                            <td key={cIdx} className="p-2.5 text-zinc-300 font-mono text-[11px] whitespace-nowrap">
-                              {row[col] !== undefined && row[col] !== null ? String(row[col]) : '-'}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* SQL Results Matrix Grid */}
-            <div className="bg-[#181a20] border border-[#2a2d36] rounded-2xl p-5 shadow-md space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
-                    <Database className="w-4 h-4 text-amber-400" />
-                    <span>Detailed Records Grid</span>
-                  </h3>
-                  <p className="text-xs text-zinc-400">
-                    Showing {slicedRows.length} of {dashboardData.totalRows} records
-                  </p>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  {/* Search Slicer */}
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-zinc-500" />
-                    <input
-                      type="text"
-                      placeholder="Filter rows..."
-                      value={filterText}
-                      onChange={(e) => setFilterText(e.target.value)}
-                      className="bg-[#101216] border border-[#2e323c] rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-400"
-                    />
-                  </div>
-
-                  <button
-                    onClick={handleExportCsv}
-                    className="px-3 py-1.5 bg-[#22242c] hover:bg-[#2b2e38] text-zinc-200 border border-[#343844] rounded-lg text-xs font-bold flex items-center space-x-1.5 transition cursor-pointer"
-                  >
-                    <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Export CSV</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Data Table */}
-              <div className="overflow-x-auto border border-[#2e323c] rounded-xl max-h-80">
-                <table className="w-full text-left text-xs border-collapse font-sans">
-                  <thead className="bg-[#14161c] text-zinc-300 font-bold border-b border-[#2e323c] sticky top-0 z-10">
-                    <tr>
-                      {dashboardData.columns.map((col, idx) => (
-                        <th key={idx} className="p-3 whitespace-nowrap font-mono text-zinc-300">
-                          {col.name}
-                          <span className="ml-1 text-[10px] text-zinc-500 font-normal">({col.type})</span>
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#22252e] bg-[#181a20]">
-                    {slicedRows.map((row, rIdx) => (
-                      <tr key={rIdx} className="hover:bg-[#20232b] transition">
-                        {dashboardData.columns.map((col, cIdx) => (
-                          <td key={cIdx} className="p-3 text-zinc-300 font-mono whitespace-nowrap text-[11px]">
-                            {row[col.name] !== null && row[col.name] !== undefined ? String(row[col.name]) : <span className="text-zinc-600">NULL</span>}
-                          </td>
-                        ))}
-                      </tr>
+            ) : (
+              <>
+                {/* Executive KPI Metric Tiles */}
+                {dashboardData.kpis && dashboardData.kpis.length > 0 && (
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+                    {dashboardData.kpis.map((kpi, idx) => (
+                      <div
+                        key={idx}
+                        className="bg-[#181a22] border border-[#292c37] hover:border-amber-500/40 rounded-xl p-3.5 shadow-md space-y-1 transition"
+                      >
+                        <div className="flex items-center justify-between text-zinc-400 text-xs font-semibold">
+                          <span className="truncate" title={kpi.label}>{kpi.label}</span>
+                          <Zap className="w-3 h-3 text-amber-400 shrink-0" />
+                        </div>
+                        <div className="text-xl md:text-2xl font-black text-amber-400 font-mono tracking-tight">
+                          {kpi.value}
+                        </div>
+                        <div className="flex items-center space-x-1 text-[10px] text-zinc-500">
+                          <span className="text-emerald-400 font-bold">● Active</span>
+                          <span className="truncate">&bull; {kpi.subtitle}</span>
+                        </div>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+                )}
+
+                {/* Page 1: Executive Overview Multi-Visual Layout */}
+                {activeCanvasPage === 'page1' && (
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                    
+                    {/* Primary Aggregated Chart Visual */}
+                    <div className="lg:col-span-2 bg-[#181a22] border border-[#292c37] rounded-xl p-4 shadow-md space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#262934] pb-2.5">
+                        <div>
+                          <h3 className="text-sm font-extrabold text-white">
+                            {dynamicVisuals.title || 'Primary Visual'}
+                          </h3>
+                          <p className="text-[11px] text-zinc-400">
+                            X: <span className="text-amber-300 font-mono font-bold">{dynamicVisuals.xKey}</span> | Y: <span className="text-indigo-300 font-mono">{dynamicVisuals.yKeys.join(', ')}</span> ({aggFunction})
+                          </p>
+                        </div>
+
+                        {/* Visual Type Mini Switcher */}
+                        <div className="flex items-center bg-[#101216] border border-[#282b35] rounded-lg p-0.5 space-x-1">
+                          {[
+                            { type: 'bar', label: 'Bar', icon: BarChart3 },
+                            { type: 'line', label: 'Line', icon: TrendingUp },
+                            { type: 'area', label: 'Area', icon: Activity }
+                          ].map(t => (
+                            <button
+                              key={t.type}
+                              onClick={() => setActiveChartType(t.type)}
+                              className={`px-2 py-1 rounded text-[10px] font-bold flex items-center gap-1 transition cursor-pointer ${
+                                activeChartType === t.type ? 'bg-amber-500 text-black' : 'text-zinc-400 hover:text-white'
+                              }`}
+                            >
+                              <t.icon className="w-3 h-3" />
+                              <span>{t.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="w-full h-72 md:h-80 pt-1">
+                        <ResponsiveContainer width="100%" height="100%">
+                          {activeChartType === 'line' ? (
+                            <LineChart data={dynamicVisuals.primaryData} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#252834" />
+                              <XAxis dataKey={dynamicVisuals.xKey} stroke="#71717a" fontSize={11} tickLine={false} />
+                              <YAxis stroke="#71717a" fontSize={11} tickLine={false} />
+                              <Tooltip contentStyle={{ backgroundColor: '#181a20', borderColor: '#343844', borderRadius: '12px', fontSize: '12px' }} />
+                              <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+                              {dynamicVisuals.yKeys.map((k, i) => (
+                                <Line key={k} type="monotone" dataKey={k} stroke={PALETTE[i % PALETTE.length]} strokeWidth={3} dot={{ r: 4 }} />
+                              ))}
+                            </LineChart>
+                          ) : activeChartType === 'area' ? (
+                            <AreaChart data={dynamicVisuals.primaryData} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#252834" />
+                              <XAxis dataKey={dynamicVisuals.xKey} stroke="#71717a" fontSize={11} tickLine={false} />
+                              <YAxis stroke="#71717a" fontSize={11} tickLine={false} />
+                              <Tooltip contentStyle={{ backgroundColor: '#181a20', borderColor: '#343844', borderRadius: '12px', fontSize: '12px' }} />
+                              <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+                              {dynamicVisuals.yKeys.map((k, i) => (
+                                <Area key={k} type="monotone" dataKey={k} stroke={PALETTE[i % PALETTE.length]} fill={PALETTE[i % PALETTE.length]} fillOpacity={0.25} strokeWidth={2.5} />
+                              ))}
+                            </AreaChart>
+                          ) : (
+                            <BarChart data={dynamicVisuals.primaryData} margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#252834" />
+                              <XAxis dataKey={dynamicVisuals.xKey} stroke="#71717a" fontSize={11} tickLine={false} />
+                              <YAxis stroke="#71717a" fontSize={11} tickLine={false} />
+                              <Tooltip contentStyle={{ backgroundColor: '#181a20', borderColor: '#343844', borderRadius: '12px', fontSize: '12px' }} />
+                              <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '8px' }} />
+                              {dynamicVisuals.yKeys.map((k, i) => (
+                                <Bar key={k} dataKey={k} fill={PALETTE[i % PALETTE.length]} radius={[6, 6, 0, 0]} />
+                              ))}
+                            </BarChart>
+                          )}
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* Secondary Donut Breakdown */}
+                    <div className="bg-[#181a22] border border-[#292c37] rounded-xl p-4 shadow-md space-y-3 flex flex-col justify-between">
+                      <div className="border-b border-[#262934] pb-2">
+                        <h3 className="text-sm font-extrabold text-white">
+                          {dynamicVisuals.donutTitle || 'Categorical Share'}
+                        </h3>
+                        <p className="text-[10px] text-zinc-400">Distribution proportion</p>
+                      </div>
+
+                      <div className="w-full h-64 md:h-72">
+                        {dynamicVisuals.donutData && dynamicVisuals.donutData.length > 0 ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <RechartsPie>
+                              <Pie
+                                data={dynamicVisuals.donutData}
+                                dataKey="value"
+                                nameKey="name"
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={55}
+                                outerRadius={85}
+                                paddingAngle={3}
+                              >
+                                {dynamicVisuals.donutData.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={PALETTE[index % PALETTE.length]} />
+                                ))}
+                              </Pie>
+                              <Tooltip contentStyle={{ backgroundColor: '#181a20', borderColor: '#343844', borderRadius: '12px', fontSize: '12px' }} />
+                              <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '8px' }} />
+                            </RechartsPie>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="h-full flex items-center justify-center text-zinc-500 text-xs">
+                            Single dimensional metric
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Page 2 or Always Visible Matrix & Breakdown */}
+                {(activeCanvasPage === 'page2' || activeCanvasPage === 'page1') && dashboardData.visuals?.matrix?.matrixData && dashboardData.visuals.matrix.matrixData.length > 0 && (
+                  <div className="bg-[#181a22] border border-[#292c37] rounded-xl p-4 shadow-md space-y-3">
+                    <div className="flex items-center justify-between border-b border-[#262934] pb-2">
+                      <div className="flex items-center space-x-2">
+                        <Grid className="w-4 h-4 text-amber-400" />
+                        <h3 className="text-sm font-extrabold text-white">Power BI 2D Pivot Matrix</h3>
+                      </div>
+                      <span className="text-[11px] text-zinc-400">
+                        {dashboardData.visuals.matrix.rowKey} &times; {dashboardData.visuals.matrix.colKey}
+                      </span>
+                    </div>
+
+                    <div className="overflow-x-auto border border-[#292d38] rounded-lg max-h-60">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead className="bg-[#12141a] text-zinc-300 font-bold border-b border-[#292d38] sticky top-0">
+                          <tr>
+                            {Object.keys(dashboardData.visuals.matrix.matrixData[0] || {}).map((col, idx) => (
+                              <th key={idx} className="p-2.5 font-mono text-zinc-300 whitespace-nowrap">
+                                {col}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#20232d] bg-[#181a22]">
+                          {dashboardData.visuals.matrix.matrixData.map((row, rIdx) => (
+                            <tr key={rIdx} className="hover:bg-[#222530] transition">
+                              {Object.keys(dashboardData.visuals.matrix.matrixData[0] || {}).map((col, cIdx) => (
+                                <td key={cIdx} className="p-2.5 text-zinc-300 font-mono text-[11px] whitespace-nowrap">
+                                  {row[col] !== undefined && row[col] !== null ? String(row[col]) : '-'}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Page 3 or Detailed Records Grid */}
+                {(activeCanvasPage === 'page3' || activeCanvasPage === 'page1') && (
+                  <div className="bg-[#181a22] border border-[#292c37] rounded-xl p-4 shadow-md space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center space-x-2">
+                        <Database className="w-4 h-4 text-amber-400" />
+                        <h3 className="text-sm font-extrabold text-white">Query Results Grid</h3>
+                        <span className="text-[11px] text-zinc-400">({slicedRows.length} records)</span>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <div className="relative">
+                          <Search className="w-3 h-3 absolute left-2.5 top-2 text-zinc-500" />
+                          <input
+                            type="text"
+                            placeholder="Filter records..."
+                            value={filterText}
+                            onChange={(e) => setFilterText(e.target.value)}
+                            className="bg-[#101216] border border-[#2c303c] rounded-lg pl-7 pr-2.5 py-1 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-400"
+                          />
+                        </div>
+
+                        <button
+                          onClick={handleExportCsv}
+                          className="px-2.5 py-1 bg-[#222632] hover:bg-[#2b3040] text-zinc-200 border border-[#343844] rounded-lg text-xs font-bold flex items-center gap-1 transition cursor-pointer"
+                        >
+                          <FileSpreadsheet className="w-3 h-3 text-emerald-400" />
+                          <span>Export CSV</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="overflow-x-auto border border-[#292d38] rounded-lg max-h-64">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead className="bg-[#12141a] text-zinc-300 font-bold border-b border-[#292d38] sticky top-0 z-10">
+                          <tr>
+                            {dashboardData.columns.map((col, idx) => (
+                              <th key={idx} className="p-2.5 whitespace-nowrap font-mono text-zinc-300">
+                                {col.name} <span className="text-[10px] text-zinc-500">({col.type})</span>
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#20232d] bg-[#181a22]">
+                          {slicedRows.slice(0, 50).map((row, rIdx) => (
+                            <tr key={rIdx} className="hover:bg-[#222530] transition">
+                              {dashboardData.columns.map((col, cIdx) => (
+                                <td key={cIdx} className="p-2.5 text-zinc-300 font-mono whitespace-nowrap text-[11px]">
+                                  {row[col.name] !== null && row[col.name] !== undefined ? String(row[col.name]) : <span className="text-zinc-600">NULL</span>}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Bottom Page Navigation Tabs (Page 1, Page 2, Page 3 like Power BI Desktop) */}
+          <div className="bg-[#14161d] border-t border-[#242732] px-4 py-2 flex items-center space-x-2 shrink-0">
+            <button
+              onClick={() => setActiveCanvasPage('page1')}
+              className={`px-3 py-1 rounded-md text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+                activeCanvasPage === 'page1'
+                  ? 'bg-amber-500 text-black shadow-sm font-black'
+                  : 'bg-[#1e212b] text-zinc-400 hover:text-white'
+              }`}
+            >
+              <BarChart2 className="w-3.5 h-3.5" />
+              <span>Page 1: Executive Overview</span>
+            </button>
+
+            <button
+              onClick={() => setActiveCanvasPage('page2')}
+              className={`px-3 py-1 rounded-md text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+                activeCanvasPage === 'page2'
+                  ? 'bg-amber-500 text-black shadow-sm font-black'
+                  : 'bg-[#1e212b] text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Grid className="w-3.5 h-3.5" />
+              <span>Page 2: Matrix & Deep Breakdown</span>
+            </button>
+
+            <button
+              onClick={() => setActiveCanvasPage('page3')}
+              className={`px-3 py-1 rounded-md text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+                activeCanvasPage === 'page3'
+                  ? 'bg-amber-500 text-black shadow-sm font-black'
+                  : 'bg-[#1e212b] text-zinc-400 hover:text-white'
+              }`}
+            >
+              <TableIcon className="w-3.5 h-3.5" />
+              <span>Page 3: Live Records Grid</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Right Sidebar: Power BI Visualizations Palette & Field Wells */}
+        {showRightPane && dashboardData?.columns && (
+          <div className="w-72 md:w-80 bg-[#161821] border-l border-[#262934] flex flex-col h-full z-10 shrink-0 shadow-2xl animate-fadeIn">
+            
+            {/* Sidebar Tab Header */}
+            <div className="p-3 border-b border-[#262934] flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Settings2 className="w-4 h-4 text-amber-400" />
+                <h3 className="text-xs font-extrabold text-white uppercase tracking-wider">Build Visual</h3>
+              </div>
+              <button
+                onClick={() => {
+                  const auto = computeBestAxes(dashboardData.columns);
+                  setCustomXAxis(auto.x);
+                  setCustomYAxis(auto.y);
+                  setAggFunction(auto.agg);
+                  setAutoAxesReason(auto.reason);
+                }}
+                className="px-2 py-0.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-[10px] font-bold rounded flex items-center gap-1 transition cursor-pointer"
+                title="Auto-detect best axes"
+              >
+                <Sparkles className="w-3 h-3" />
+                <span>Auto Axes</span>
+              </button>
+            </div>
+
+            {/* Sidebar Content */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
+              
+              {/* Visualizations Type Palette Icons */}
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Visual Type:</span>
+                <div className="grid grid-cols-4 gap-1.5 bg-[#101216] border border-[#262934] rounded-xl p-2">
+                  {[
+                    { id: 'bar', icon: BarChart3, label: 'Bar' },
+                    { id: 'line', icon: TrendingUp, label: 'Line' },
+                    { id: 'area', icon: Activity, label: 'Area' },
+                    { id: 'donut', icon: PieIcon, label: 'Donut' }
+                  ].map(v => (
+                    <button
+                      key={v.id}
+                      onClick={() => setActiveChartType(v.id)}
+                      className={`p-2 rounded-lg flex flex-col items-center justify-center gap-1 transition cursor-pointer ${
+                        activeChartType === v.id
+                          ? 'bg-amber-500 text-black font-extrabold shadow-sm'
+                          : 'text-zinc-400 hover:text-white hover:bg-[#1a1d26]'
+                      }`}
+                      title={v.label}
+                    >
+                      <v.icon className="w-4 h-4" />
+                      <span className="text-[9px]">{v.label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
 
-              {/* Underlying SQL Query Box */}
-              <div className="p-3 bg-[#0d0e12] border border-[#262932] rounded-xl space-y-1">
-                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider font-mono">Executed SQL:</span>
-                <pre className="text-[11px] font-mono text-emerald-400 overflow-x-auto whitespace-pre-wrap">
-                  {dashboardData.sql}
-                </pre>
+              {/* Field Well: X-Axis Dimension */}
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1">
+                  <Type className="w-3 h-3" /> X-Axis (Dimension):
+                </span>
+                <select
+                  value={customXAxis}
+                  onChange={(e) => setCustomXAxis(e.target.value)}
+                  className="w-full bg-[#101216] border border-[#343844] rounded-lg px-2.5 py-2 text-white text-xs font-semibold focus:outline-none focus:border-amber-400"
+                >
+                  {dashboardData.columns.map(col => (
+                    <option key={col.name} value={col.name}>
+                      {col.name} ({col.type})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Field Well: Y-Axis Values / Metrics */}
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider flex items-center gap-1">
+                  <Hash className="w-3 h-3" /> Y-Axis (Values):
+                </span>
+                <div className="bg-[#101216] border border-[#292c37] rounded-xl p-2.5 space-y-1.5">
+                  <button
+                    onClick={() => setCustomYAxis(['Record Count'])}
+                    className={`w-full text-left px-2.5 py-1 rounded-md text-xs font-bold transition flex items-center justify-between ${
+                      customYAxis.includes('Record Count') ? 'bg-indigo-600 text-white' : 'text-zinc-400 hover:text-white hover:bg-[#1a1d26]'
+                    }`}
+                  >
+                    <span>Record Count (Frequency)</span>
+                    {customYAxis.includes('Record Count') && <Check className="w-3.5 h-3.5" />}
+                  </button>
+
+                  {dashboardData.columns.filter(c => c.type === 'numeric').map(c => {
+                    const isSelected = customYAxis.includes(c.name);
+                    return (
+                      <button
+                        key={c.name}
+                        onClick={() => {
+                          setCustomYAxis(prev => {
+                            const clean = prev.filter(y => y !== 'Record Count');
+                            if (clean.includes(c.name)) {
+                              const next = clean.filter(y => y !== c.name);
+                              return next.length > 0 ? next : ['Record Count'];
+                            }
+                            return [...clean, c.name];
+                          });
+                        }}
+                        className={`w-full text-left px-2.5 py-1 rounded-md text-xs font-bold transition flex items-center justify-between ${
+                          isSelected ? 'bg-amber-500 text-black' : 'text-zinc-400 hover:text-white hover:bg-[#1a1d26]'
+                        }`}
+                      >
+                        <span className="truncate">&sum; {c.name}</span>
+                        {isSelected && <Check className="w-3.5 h-3.5" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Field Well: Aggregation Function */}
+              <div className="space-y-1.5">
+                <span className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider">
+                  Calculation Function:
+                </span>
+                <select
+                  value={aggFunction}
+                  onChange={(e) => setAggFunction(e.target.value)}
+                  className="w-full bg-[#101216] border border-[#343844] rounded-lg px-2.5 py-2 text-white text-xs font-bold focus:outline-none focus:border-emerald-400"
+                >
+                  <option value="SUM">SUM (Total)</option>
+                  <option value="AVG">AVERAGE (Mean)</option>
+                  <option value="COUNT">COUNT (Frequency)</option>
+                  <option value="MAX">MAX (Maximum)</option>
+                  <option value="MIN">MIN (Minimum)</option>
+                </select>
+              </div>
+
+              {/* Data Table Schema Fields Browser */}
+              <div className="space-y-1.5 pt-2 border-t border-[#262934]">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1">
+                  <Database className="w-3 h-3 text-amber-400" /> Data Table Fields:
+                </span>
+                <div className="space-y-1 max-h-36 overflow-y-auto">
+                  {dashboardData.columns.map(col => (
+                    <div key={col.name} className="flex items-center justify-between p-1.5 rounded bg-[#101216] border border-[#222530] text-[11px]">
+                      <span className="text-zinc-300 font-mono truncate">{col.name}</span>
+                      <span className="text-[10px] text-zinc-500">{col.type}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* DAX Copilot Sidebar Drawer */}
+        {/* DAX Copilot Drawer */}
         {isCopilotOpen && (
-          <div className="w-80 md:w-96 bg-[#16181f] border-l border-[#2e323c] flex flex-col h-full z-20 shadow-2xl animate-fadeIn shrink-0">
-            <div className="p-4 border-b border-[#2e323c] flex items-center justify-between">
+          <div className="w-80 md:w-96 bg-[#161821] border-l border-[#262934] flex flex-col h-full z-20 shadow-2xl animate-fadeIn shrink-0">
+            <div className="p-4 border-b border-[#262934] flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Sparkles className="w-4 h-4 text-amber-400" />
                 <h3 className="text-sm font-extrabold text-white">Power BI DAX Copilot</h3>
@@ -1040,12 +1102,11 @@ export default function PowerBIViewer({ initialQuery, onNavigate }) {
 
             <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
               <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-200/90 leading-relaxed">
-                <span className="font-bold text-amber-300">Query Target:</span> Generating DAX expressions tailored to the columns in this SQL query result.
+                <span className="font-bold text-amber-300">Target Schema:</span> Generating measures optimized for this active SQL query.
               </div>
 
-              {/* Sample Prompts */}
               <div className="space-y-1.5">
-                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Common DAX Formulas:</span>
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Common DAX Formulas:</span>
                 <div className="flex flex-col gap-1.5">
                   {[
                     'Calculate YoY Growth %',
@@ -1056,7 +1117,7 @@ export default function PowerBIViewer({ initialQuery, onNavigate }) {
                       key={i}
                       type="button"
                       onClick={() => setDaxPrompt(sug)}
-                      className="text-left px-3 py-2 bg-[#20232b] hover:bg-[#282c36] border border-[#2e323c] rounded-lg text-zinc-300 hover:text-white transition"
+                      className="text-left px-3 py-2 bg-[#1f222b] hover:bg-[#282c38] border border-[#292d38] rounded-lg text-zinc-300 hover:text-white transition"
                     >
                       {sug}
                     </button>
@@ -1064,7 +1125,6 @@ export default function PowerBIViewer({ initialQuery, onNavigate }) {
                 </div>
               </div>
 
-              {/* Input Form */}
               <form onSubmit={handleGenerateDax} className="space-y-2 pt-2">
                 <textarea
                   rows={3}
@@ -1083,7 +1143,6 @@ export default function PowerBIViewer({ initialQuery, onNavigate }) {
                 </button>
               </form>
 
-              {/* DAX Result Card */}
               {daxResult && (
                 <div className="p-3.5 bg-[#101216] border border-amber-500/40 rounded-xl space-y-2.5 animate-fadeIn">
                   <div className="flex items-center justify-between">
@@ -1111,7 +1170,7 @@ export default function PowerBIViewer({ initialQuery, onNavigate }) {
         )}
       </div>
 
-      {/* Power Query M-Code Modal for this SQL Query */}
+      {/* Power Query M-Code Modal */}
       {showMCodeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
           <div className="bg-[#181a20] border border-[#2e323c] rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl space-y-4 p-6 text-xs">
@@ -1126,7 +1185,7 @@ export default function PowerBIViewer({ initialQuery, onNavigate }) {
             </div>
 
             <p className="text-zinc-300">
-              Paste this in <strong className="text-white">Power BI Desktop &rarr; Transform Data &rarr; Advanced Editor</strong> to load this exact query result:
+              Paste this in <strong className="text-white">Power BI Desktop &rarr; Transform Data &rarr; Advanced Editor</strong>:
             </p>
 
             <pre className="p-4 bg-[#0d0e12] border border-[#2a2d36] rounded-xl text-emerald-400 font-mono text-[11px] overflow-x-auto max-h-60 whitespace-pre-wrap">
@@ -1150,7 +1209,7 @@ export default function PowerBIViewer({ initialQuery, onNavigate }) {
         </div>
       )}
 
-      {/* 1-Click Power BI Desktop Connection Helper Modal */}
+      {/* 1-Click Power BI Desktop Connection Modal */}
       {showPbidsModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
           <div className="bg-[#181a20] border border-[#2e323c] rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl p-6 space-y-4 text-xs">
@@ -1254,7 +1313,7 @@ export default function PowerBIViewer({ initialQuery, onNavigate }) {
         </div>
       )}
 
-      {/* Power BI REST API & Azure Integration Settings Modal */}
+      {/* Power BI REST API Settings Modal */}
       {showApiModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
           <div className="bg-[#181a20] border border-[#2e323c] rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl p-6 space-y-4 text-xs">
