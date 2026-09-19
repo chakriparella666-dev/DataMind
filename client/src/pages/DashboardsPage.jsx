@@ -4,7 +4,7 @@ import { getDashboards, createDashboard, deleteDashboard, getDataSources } from 
 import PowerBIViewer from '../components/PowerBIViewer';
 
 export default function DashboardsPage({ onNavigate }) {
-  const [activeTab, setActiveTab] = useState('powerbi'); // 'powerbi' or 'sql'
+  const [activeTab, setActiveTab] = useState('sql'); // 'sql' (All Dashboards grid) or 'powerbi' (Power BI Canvas)
   const [selectedPowerBIQuery, setSelectedPowerBIQuery] = useState(null);
   const [dashboards, setDashboards] = useState([]);
   const [dataSources, setDataSources] = useState([]);
@@ -122,18 +122,18 @@ export default function DashboardsPage({ onNavigate }) {
         <div className="bg-[#18181d] border-b border-[#2a2a32] px-5 py-2.5 flex items-center justify-between shrink-0">
           <div className="flex items-center space-x-2">
             <button
+              onClick={() => setActiveTab('sql')}
+              className="px-3 py-1.5 bg-[#202026] hover:bg-[#282832] text-zinc-300 hover:text-white font-bold text-xs rounded-xl flex items-center space-x-1.5 border border-[#2e2e38] transition cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>All Dashboards ({dashboards.length})</span>
+            </button>
+            <button
               onClick={() => setActiveTab('powerbi')}
               className="px-3.5 py-1.5 bg-amber-500 text-black font-extrabold text-xs rounded-xl flex items-center space-x-1.5 shadow-sm transition"
             >
               <BarChart2 className="w-4 h-4 text-black" />
               <span>Power BI Hub</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('sql')}
-              className="px-3.5 py-1.5 bg-[#202026] hover:bg-[#282832] text-zinc-300 hover:text-white font-bold text-xs rounded-xl flex items-center space-x-1.5 border border-[#2e2e38] transition"
-            >
-              <LayoutDashboard className="w-3.5 h-3.5 text-indigo-400" />
-              <span>SQL Dashboards ({dashboards.length})</span>
             </button>
           </div>
 

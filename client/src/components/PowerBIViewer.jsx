@@ -54,6 +54,12 @@ export default function PowerBIViewer({ initialQuery, onNavigate }) {
   const [copiedMCode, setCopiedMCode] = useState(false);
   const [copiedField, setCopiedField] = useState('');
 
+  // DAX Copilot State
+  const [isCopilotOpen, setIsCopilotOpen] = useState(false);
+  const [daxPrompt, setDaxPrompt] = useState('');
+  const [daxResult, setDaxResult] = useState(null);
+  const [isGeneratingDax, setIsGeneratingDax] = useState(false);
+
   // Power BI REST API Integration State
   const [showApiModal, setShowApiModal] = useState(false);
   const [powerBiConfig, setPowerBiConfig] = useState(() => {
