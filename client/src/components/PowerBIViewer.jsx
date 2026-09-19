@@ -254,40 +254,44 @@ export default function PowerBIViewer({ initialQuery, onNavigate }) {
       avgVal = totalVal / (slicedRows.length || 1);
     }
 
-    const formatVal = (v) => {
-      if (v >= 1000000) return `${(v / 1000000).toFixed(1)}M`;
-      if (v >= 1000) return `${(v / 1000).toFixed(1)}K`;
-      return Math.round(v * 10) / 10;
+    const cleanLabel = (str) => {
+      if (!str) return '';
+      return str.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
     };
 
+    const formatVal = (v) => {
+      if (v >= 1000000000) return `$${(v / 1000000000).toFixed(2)}B`;
+      if (v >= 1000000) return `$${(v / 1000000).toFixed(2)}M`;
+      if (v >= 1000) return `$${(v / 1000).toFixed(1)}K`;
+      return typeof v === 'number' ? (v % 1 === 0 ? v.toLocaleString() : (Math.round(v * 100) / 100).toLocaleString()) : v;
+    };
+
+    // 1. KPI 1: Total or Sum of Primary Metric
     const kpi1 = {
-      label: aggFunction === 'AVG' ? `Average ${metricName}` : `Total ${metricName}`,
-      value: formatVal(aggFunction === 'AVG' ? avgVal : totalVal),
-      subtitle: `${aggFunction} across ${slicedRows.length} records`,
+      label: `Total ${cleanLabel(metricName)}`,
+      value: formatVal(totalVal),
+      subtitle: `${slicedRows.length} filtered records`,
       isPositive: true
     };
 
-    // 2. Compute KPI 2 (Secondary metric or metric gap / variance)
-    const secondaryMetric = numCols.find(c => c !== metricName) || numCols[1];
+    // 2. KPI 2: Clean Secondary Metric, or Average / Top Category
+    const secondaryMetric = numCols.find(c => c !== metricName);
     let kpi2 = {};
     if (secondaryMetric) {
       const secNumbers = slicedRows.map(r => Number(r[secondaryMetric]) || 0);
       const secTotal = secNumbers.reduce((a, b) => a + b, 0);
-      const secAvg = secTotal / (slicedRows.length || 1);
       kpi2 = {
-        label: `${secondaryMetric} Metric`,
-        value: formatVal(aggFunction === 'AVG' ? secAvg : secTotal),
-        subtitle: `Secondary aggregate across records`,
+        label: `Total ${cleanLabel(secondaryMetric)}`,
+        value: formatVal(secTotal),
+        subtitle: `Secondary metric total`,
         isPositive: true
       };
     } else {
-      // Calculate Variance / Spread Gap
-      const minVal = isCountMode ? 1 : Math.min(...slicedRows.map(r => Number(r[metricName]) || 0));
-      const maxVal = isCountMode ? slicedRows.length : Math.max(...slicedRows.map(r => Number(r[metricName]) || 0));
+      // Meaningful Average Metric (e.g. Average Sale per transaction)
       kpi2 = {
-        label: `${metricName} Gap`,
-        value: formatVal(maxVal - minVal),
-        subtitle: `Range Spread (Max - Min)`,
+        label: `Average ${cleanLabel(metricName)}`,
+        value: formatVal(avgVal),
+        subtitle: `Mean per transaction / record`,
         isPositive: true
       };
     }
