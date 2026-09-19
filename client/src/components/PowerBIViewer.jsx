@@ -54,11 +54,75 @@ export default function PowerBIViewer({ initialQuery, onNavigate }) {
   const [copiedMCode, setCopiedMCode] = useState(false);
   const [copiedField, setCopiedField] = useState('');
 
-  // DAX Copilot State
-  const [isCopilotOpen, setIsCopilotOpen] = useState(false);
-  const [daxPrompt, setDaxPrompt] = useState('');
-  const [daxResult, setDaxResult] = useState(null);
-  const [isGeneratingDax, setIsGeneratingDax] = useState(false);
+  // Power BI REST API Integration State
+  const [showApiModal, setShowApiModal] = useState(false);
+  const [powerBiConfig, setPowerBiConfig] = useState(() => {
+    try {
+      const saved = localStorage.getItem('powerbi_api_config');
+      return saved ? JSON.parse(saved) : {
+        tenantId: '',
+        clientId: '',
+        clientSecret: '',
+        workspaceId: '',
+        reportId: '',
+        embedUrl: ''
+      };
+    } catch (e) {
+      return { tenantId: '', clientId: '', clientSecret: '', workspaceId: '', reportId: '', embedUrl: '' };
+    }
+  });
+  const [activeViewMode, setActiveViewMode] = useState('canvas'); // 'canvas' | 'embed'
+  const [autoAxesReason, setAutoAxesReason] = useState('');
+
+  // Smart Best Axes Recommendation Engine
+  const computeBestAxes = (cols) => {
+    if (!cols || cols.length === 0) {
+      return { x: '', y: ['Record Count'], agg: 'SUM', reason: 'Default count' };
+    }
+    const textCols = cols.filter(c => c.type !== 'numeric').map(c => c.name);
+    const numCols = cols.filter(c => c.type === 'numeric').map(c => c.name);
+
+    // 1. Check for temporal/time columns for trends (X-Axis)
+    const timeKeywords = ['date', 'month', 'year', 'quarter', 'day', 'time', 'created', 'period', 'week'];
+    let bestX = textCols.find(col => timeKeywords.some(k => col.toLowerCase().includes(k)));
+
+    // 2. Check for primary nominal/categorical dimensions (X-Axis)
+    if (!bestX) {
+      const dimKeywords = ['segment', 'country', 'product', 'category', 'dept', 'department', 'name', 'brand', 'region', 'status', 'company', 'role', 'title'];
+      bestX = textCols.find(col => dimKeywords.some(k => col.toLowerCase().includes(k)));
+    }
+
+    // 3. Fallback to first text column, or first available column
+    if (!bestX) {
+      bestX = textCols[0] || cols[0]?.name || 'Dimension';
+    }
+
+    // 4. Select best Y-axis metrics
+    let bestY = [];
+    let bestAgg = 'SUM';
+    let reason = '';
+
+    if (numCols.length > 0) {
+      const metricKeywords = ['sales', 'gross', 'profit', 'revenue', 'units', 'unit', 'amount', 'salary', 'price', 'score', 'cost', 'total', 'val'];
+      const matched = numCols.filter(col => metricKeywords.some(k => col.toLowerCase().includes(k)));
+      bestY = matched.length > 0 ? matched.slice(0, 2) : numCols.slice(0, 2);
+
+      const firstMetric = (bestY[0] || '').toLowerCase();
+      if (firstMetric.includes('price') || firstMetric.includes('rate') || firstMetric.includes('score') || firstMetric.includes('avg') || firstMetric.includes('salary')) {
+        bestAgg = 'AVG';
+        reason = `Auto-Selected: Average ${bestY.join(', ')} grouped by ${bestX}`;
+      } else {
+        bestAgg = 'SUM';
+        reason = `Auto-Selected: Total ${bestY.join(', ')} grouped by ${bestX}`;
+      }
+    } else {
+      bestY = ['Record Count'];
+      bestAgg = 'COUNT';
+      reason = `Auto-Selected: Frequency count grouped by ${bestX}`;
+    }
+
+    return { x: bestX, y: bestY, agg: bestAgg, reason };
+  };
 
   // Load Saved SQL Queries on Mount
   const fetchQueriesAndInit = async () => {
@@ -107,8 +171,6 @@ export default function PowerBIViewer({ initialQuery, onNavigate }) {
     setLoadingDashboard(true);
     setError(null);
     setSelectedSlicers({});
-    setCustomXAxis('');
-    setCustomYAxis([]);
     try {
       const res = await executePowerBIQuery({
         sql: sqlString.trim(),
@@ -120,16 +182,12 @@ export default function PowerBIViewer({ initialQuery, onNavigate }) {
         setCustomSql(sqlString.trim());
         setCustomQuestion(questionString || '');
 
-        // Auto-select best initial X-axis and Y-axis
-        const cols = res.dashboard.columns || [];
-        const textCols = cols.filter(c => c.type !== 'numeric').map(c => c.name);
-        const numCols = cols.filter(c => c.type === 'numeric').map(c => c.name);
-
-        const defaultX = textCols[0] || cols[0]?.name || '';
-        const defaultY = numCols.length > 0 ? numCols.slice(0, 2) : ['Record Count'];
-
-        setCustomXAxis(defaultX);
-        setCustomYAxis(defaultY);
+        // Auto-select smart optimal X-axis and Y-axis
+        const auto = computeBestAxes(res.dashboard.columns || []);
+        setCustomXAxis(auto.x);
+        setCustomYAxis(auto.y);
+        setAggFunction(auto.agg);
+        setAutoAxesReason(auto.reason);
       } else {
         setError(res.error || 'Failed to generate Power BI dashboard');
       }
@@ -416,6 +474,16 @@ export default function PowerBIViewer({ initialQuery, onNavigate }) {
             <span>Customize Visuals</span>
           </button>
 
+          {/* ⚡ Power BI REST API Settings */}
+          <button
+            onClick={() => setShowApiModal(true)}
+            className="px-3 py-2 bg-[#22242c] hover:bg-[#2b2e38] text-amber-300 border border-amber-500/30 font-bold text-xs rounded-xl flex items-center space-x-1.5 transition cursor-pointer"
+            title="Configure Power BI REST API, Workspace & Embed Token"
+          >
+            <Activity className="w-3.5 h-3.5 text-amber-400" />
+            <span>Power BI API</span>
+          </button>
+
           {/* ⚡ 1-Click Open in Power BI Desktop */}
           <button
             onClick={handleDownloadPbids}
@@ -423,7 +491,7 @@ export default function PowerBIViewer({ initialQuery, onNavigate }) {
             title="Download Power BI Desktop Data Source (.pbids)"
           >
             <Download className="w-4 h-4" />
-            <span>⚡ 1-Click Open in Power BI</span>
+            <span>⚡ 1-Click Power BI</span>
           </button>
 
           {/* Power Query M-Code for this Query */}
@@ -578,12 +646,32 @@ export default function PowerBIViewer({ initialQuery, onNavigate }) {
 
           {/* Reset Best Axis Button */}
           <button
-            onClick={handleResetBestAxis}
-            className="px-3 py-1.5 bg-[#242834] hover:bg-[#2e3342] text-zinc-300 hover:text-white border border-[#383f50] rounded-lg text-xs font-bold flex items-center gap-1 transition ml-auto"
+            onClick={() => {
+              if (dashboardData?.columns) {
+                const auto = computeBestAxes(dashboardData.columns);
+                setCustomXAxis(auto.x);
+                setCustomYAxis(auto.y);
+                setAggFunction(auto.agg);
+                setAutoAxesReason(auto.reason);
+              }
+            }}
+            className="px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 transition ml-auto shadow-sm"
+            title="Auto-detect optimal X-axis dimension, metric(s) and aggregation for this dataset"
           >
-            <RotateCcw className="w-3 h-3" />
-            <span>Reset Best Axis</span>
+            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+            <span>⚡ Apply Best Axes</span>
           </button>
+        </div>
+      )}
+
+      {/* Auto Axes Reason Notification Banner */}
+      {autoAxesReason && (
+        <div className="bg-[#14161f] border-b border-[#242736] px-5 py-1.5 flex items-center justify-between text-[11px] text-zinc-400 shrink-0">
+          <div className="flex items-center space-x-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+            <span className="text-zinc-300 font-medium">{autoAxesReason}</span>
+          </div>
+          <span className="text-[10px] text-zinc-500 font-mono">X: {customXAxis} | Y: {customYAxis.join(', ')} ({aggFunction})</span>
         </div>
       )}
 
@@ -1155,6 +1243,119 @@ export default function PowerBIViewer({ initialQuery, onNavigate }) {
               >
                 Got It, Open Power BI
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Power BI REST API & Azure Integration Settings Modal */}
+      {showApiModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-[#181a20] border border-[#2e323c] rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl p-6 space-y-4 text-xs">
+            <div className="flex items-center justify-between border-b border-[#2e323c] pb-3">
+              <div className="flex items-center space-x-2">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
+                  <Activity className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-white">Power BI REST API & Embed Integration</h3>
+                  <p className="text-[11px] text-zinc-400">Connect your Power BI Service workspace, tenant & reports</p>
+                </div>
+              </div>
+              <button onClick={() => setShowApiModal(false)} className="p-1.5 text-zinc-400 hover:text-white rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[11px] font-bold text-zinc-300 mb-1">Power BI Report Embed URL</label>
+                <input
+                  type="text"
+                  placeholder="https://app.powerbi.com/reportEmbed?reportId=...&groupId=..."
+                  value={powerBiConfig.embedUrl || ''}
+                  onChange={(e) => setPowerBiConfig({ ...powerBiConfig, embedUrl: e.target.value })}
+                  className="w-full bg-[#101216] border border-[#343844] focus:border-amber-400 rounded-xl px-3 py-2 text-white placeholder-zinc-500 focus:outline-none font-mono text-[11px]"
+                />
+                <p className="text-[10px] text-zinc-500 mt-1">Get this from Power BI Service &rarr; File &rarr; Embed report &rarr; Website or portal</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-zinc-300 mb-1">Azure Tenant ID</label>
+                  <input
+                    type="text"
+                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    value={powerBiConfig.tenantId || ''}
+                    onChange={(e) => setPowerBiConfig({ ...powerBiConfig, tenantId: e.target.value })}
+                    className="w-full bg-[#101216] border border-[#343844] focus:border-amber-400 rounded-xl px-3 py-2 text-white placeholder-zinc-500 focus:outline-none font-mono text-[11px]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-zinc-300 mb-1">Application / Client ID</label>
+                  <input
+                    type="text"
+                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    value={powerBiConfig.clientId || ''}
+                    onChange={(e) => setPowerBiConfig({ ...powerBiConfig, clientId: e.target.value })}
+                    className="w-full bg-[#101216] border border-[#343844] focus:border-amber-400 rounded-xl px-3 py-2 text-white placeholder-zinc-500 focus:outline-none font-mono text-[11px]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-zinc-300 mb-1">Workspace (Group) ID</label>
+                  <input
+                    type="text"
+                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    value={powerBiConfig.workspaceId || ''}
+                    onChange={(e) => setPowerBiConfig({ ...powerBiConfig, workspaceId: e.target.value })}
+                    className="w-full bg-[#101216] border border-[#343844] focus:border-amber-400 rounded-xl px-3 py-2 text-white placeholder-zinc-500 focus:outline-none font-mono text-[11px]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-zinc-300 mb-1">Report ID</label>
+                  <input
+                    type="text"
+                    placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    value={powerBiConfig.reportId || ''}
+                    onChange={(e) => setPowerBiConfig({ ...powerBiConfig, reportId: e.target.value })}
+                    className="w-full bg-[#101216] border border-[#343844] focus:border-amber-400 rounded-xl px-3 py-2 text-white placeholder-zinc-500 focus:outline-none font-mono text-[11px]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-zinc-300 mb-1">Client Secret (Azure App Registration)</label>
+                <input
+                  type="password"
+                  placeholder="••••••••••••••••••••••••••••••••"
+                  value={powerBiConfig.clientSecret || ''}
+                  onChange={(e) => setPowerBiConfig({ ...powerBiConfig, clientSecret: e.target.value })}
+                  className="w-full bg-[#101216] border border-[#343844] focus:border-amber-400 rounded-xl px-3 py-2 text-white placeholder-zinc-500 focus:outline-none font-mono text-[11px]"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-[#2e323c]">
+              <div className="text-[11px] text-emerald-400 font-medium">
+                {powerBiConfig.embedUrl ? '✓ Power BI URL Active' : '⚡ Direct PostgreSQL DirectQuery Active'}
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    localStorage.setItem('powerbi_api_config', JSON.stringify(powerBiConfig));
+                    setSuccessMsg('Power BI REST API configuration saved!');
+                    setShowApiModal(false);
+                    setTimeout(() => setSuccessMsg(null), 3000);
+                  }}
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl transition cursor-pointer"
+                >
+                  Save Configuration
+                </button>
+              </div>
             </div>
           </div>
         </div>

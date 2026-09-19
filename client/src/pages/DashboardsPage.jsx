@@ -266,13 +266,20 @@ export default function DashboardsPage({ onNavigate }) {
                     return (
                       <div
                         key={dash.id || dash._id}
-                        className="bg-[#18181b] border border-[#2e2e36] hover:border-zinc-500 rounded-2xl p-5 shadow-lg flex flex-col justify-between space-y-4 transition"
+                        className="bg-[#18181b] border border-[#2e2e36] hover:border-amber-500/60 rounded-2xl p-5 shadow-lg flex flex-col justify-between space-y-4 transition group"
                       >
-                        <div className="space-y-2.5">
+                        <div
+                          className="space-y-2.5 cursor-pointer"
+                          onClick={() => {
+                            setSelectedPowerBIQuery(dash);
+                            setActiveTab('powerbi');
+                          }}
+                          title="Click to visualize in Power BI"
+                        >
                           <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-start space-x-2 text-zinc-300 font-bold text-sm min-w-0 flex-1">
-                              <LayoutDashboard className="w-4 h-4 shrink-0 mt-0.5 text-indigo-400" />
-                              <span className="text-white text-sm md:text-base font-bold leading-snug break-words" title={fullQuestionText}>
+                            <div className="flex items-start space-x-2 text-zinc-300 group-hover:text-amber-300 font-bold text-sm min-w-0 flex-1 transition">
+                              <LayoutDashboard className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                              <span className="text-white group-hover:text-amber-200 text-sm md:text-base font-bold leading-snug break-words" title={fullQuestionText}>
                                 {fullQuestionText}
                               </span>
                             </div>
@@ -300,21 +307,23 @@ export default function DashboardsPage({ onNavigate }) {
                               setSelectedPowerBIQuery(dash);
                               setActiveTab('powerbi');
                             }}
-                            className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black text-xs font-black rounded-lg transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-[0.98]"
+                            className="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black text-xs font-black rounded-lg transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-[0.98]"
                             title="Visualize full interactive Power BI Dashboard for this query"
                           >
                             <BarChart2 className="w-3.5 h-3.5 fill-black" />
-                            <span>Power BI</span>
+                            <span>⚡ Power BI</span>
                           </button>
                           <button
                             onClick={() => onNavigate?.('workspace', dash)}
                             className="px-3 py-1.5 bg-[#2a2c36] hover:bg-[#343744] text-zinc-200 hover:text-white text-xs font-bold rounded-lg transition cursor-pointer border border-[#383b48]"
+                            title="Open SQL Workspace"
                           >
                             SQL View
                           </button>
                           <button
                             onClick={() => handleDelete(dash.id || dash._id)}
                             className="px-2 py-1.5 border border-rose-800/80 hover:bg-rose-950/40 text-rose-400 text-xs font-bold rounded-lg transition cursor-pointer"
+                            title="Delete Dashboard"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
