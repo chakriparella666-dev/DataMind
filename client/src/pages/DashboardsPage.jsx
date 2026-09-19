@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Eye, Edit2, Trash2, ArrowLeft, AlertCircle, LayoutDashboard, CheckCircle2 } from 'lucide-react';
+import { Plus, Eye, Edit2, Trash2, ArrowLeft, AlertCircle, LayoutDashboard, CheckCircle2, BarChart2, Sparkles } from 'lucide-react';
 import { getDashboards, createDashboard, deleteDashboard, getDataSources } from '../services/api';
+import PowerBIViewer from '../components/PowerBIViewer';
 
 export default function DashboardsPage({ onNavigate }) {
+  const [activeTab, setActiveTab] = useState('powerbi'); // 'powerbi' or 'sql'
   const [dashboards, setDashboards] = useState([]);
   const [dataSources, setDataSources] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -111,9 +113,64 @@ export default function DashboardsPage({ onNavigate }) {
     }
   };
 
+  // If in Power BI Tab, render the full immersive Power BI Viewer directly in the app
+  if (activeTab === 'powerbi' && !isAdding) {
+    return (
+      <div className="flex-1 h-screen bg-[#111318] flex flex-col overflow-hidden font-sans antialiased">
+        {/* Top Hub Navigation Bar */}
+        <div className="bg-[#18181d] border-b border-[#2a2a32] px-5 py-2.5 flex items-center justify-between shrink-0">
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setActiveTab('powerbi')}
+              className="px-3.5 py-1.5 bg-amber-500 text-black font-extrabold text-xs rounded-xl flex items-center space-x-1.5 shadow-sm transition"
+            >
+              <BarChart2 className="w-4 h-4 text-black" />
+              <span>Power BI Hub</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('sql')}
+              className="px-3.5 py-1.5 bg-[#202026] hover:bg-[#282832] text-zinc-300 hover:text-white font-bold text-xs rounded-xl flex items-center space-x-1.5 border border-[#2e2e38] transition"
+            >
+              <LayoutDashboard className="w-3.5 h-3.5 text-indigo-400" />
+              <span>SQL Dashboards ({dashboards.length})</span>
+            </button>
+          </div>
+
+          <div className="hidden sm:flex items-center space-x-2 text-xs text-zinc-400">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span className="font-medium">DirectQuery & Slicers Active</span>
+          </div>
+        </div>
+
+        {/* Embedded Power BI Component */}
+        <PowerBIViewer onNavigate={onNavigate} />
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 h-screen bg-[#18181b] text-slate-100 overflow-y-auto p-6 md:p-8 font-sans antialiased">
       <div className="max-w-6xl w-full mx-auto space-y-6">
+
+        {/* Top Hub Tab Bar */}
+        <div className="bg-[#222226] border border-[#2e2e36] rounded-2xl p-2.5 flex items-center justify-between shadow-lg">
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => setActiveTab('powerbi')}
+              className="px-4 py-2 bg-[#18181b] hover:bg-[#2a2a32] text-zinc-300 hover:text-amber-300 font-bold text-xs rounded-xl flex items-center space-x-2 border border-[#33333e] transition cursor-pointer"
+            >
+              <BarChart2 className="w-4 h-4 text-amber-400" />
+              <span>Switch to Power BI Hub</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('sql')}
+              className="px-4 py-2 bg-[#5850ec] text-white font-bold text-xs rounded-xl flex items-center space-x-2 shadow-sm"
+            >
+              <LayoutDashboard className="w-4 h-4 text-white" />
+              <span>SQL Dashboards ({dashboards.length})</span>
+            </button>
+          </div>
+        </div>
 
         {error && (
           <div className="p-4 bg-rose-950/60 border border-rose-800/80 rounded-xl text-rose-300 text-sm flex items-center gap-2.5 font-medium shadow-lg">
@@ -134,8 +191,8 @@ export default function DashboardsPage({ onNavigate }) {
             {/* Page Header */}
             <div className="bg-[#222226] border border-[#2e2e36] rounded-2xl p-6 md:p-7 shadow-xl flex items-center justify-between">
               <div>
-                <h1 className="text-2xl md:text-3xl font-bold text-white mb-1.5">Dashboards</h1>
-                <p className="text-sm md:text-base text-zinc-300 font-medium">Organize and visualize your data using custom dashboards and widgets.</p>
+                <h1 className="text-2xl md:text-3xl font-bold text-white mb-1.5">SQL Dashboards</h1>
+                <p className="text-sm md:text-base text-zinc-300 font-medium">Organize and visualize your data using custom database query widgets.</p>
               </div>
 
               <button

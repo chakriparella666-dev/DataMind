@@ -158,6 +158,26 @@ const initAppDb = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS powerbi_reports (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        category VARCHAR(100) DEFAULT 'Executive',
+        embed_type VARCHAR(50) DEFAULT 'embed_url',
+        embed_url TEXT NOT NULL,
+        report_id VARCHAR(255),
+        workspace_id VARCHAR(255),
+        client_id VARCHAR(255),
+        client_secret TEXT,
+        tenant_id VARCHAR(255),
+        dataset_name VARCHAR(255),
+        tags TEXT,
+        visibility VARCHAR(50) DEFAULT 'Private',
+        user_id VARCHAR(100) DEFAULT 'default_user',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
       ALTER TABLE data_sources ADD COLUMN IF NOT EXISTS user_id VARCHAR(100) DEFAULT 'default_user';
       ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS user_id VARCHAR(100) DEFAULT 'default_user';
       ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS user_id VARCHAR(100) DEFAULT 'default_user';
@@ -172,6 +192,7 @@ const initAppDb = async () => {
       ALTER TABLE dashboards ADD COLUMN IF NOT EXISTS tags TEXT;
       ALTER TABLE file_uploads ADD COLUMN IF NOT EXISTS user_id VARCHAR(100) DEFAULT 'default_user';
       ALTER TABLE file_uploads ADD COLUMN IF NOT EXISTS file_data BYTEA;
+      ALTER TABLE powerbi_reports ADD COLUMN IF NOT EXISTS user_id VARCHAR(100) DEFAULT 'default_user';
     `);
 
     client.release();

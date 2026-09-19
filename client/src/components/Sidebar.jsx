@@ -124,17 +124,22 @@ export default function Sidebar({
             <span>Database Workspace</span>
           </button>
 
-          {/* Dashboards */}
+          {/* Dashboards & Power BI */}
           <button
             onClick={() => handleNav('dashboards')}
-            className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-base font-bold transition cursor-pointer ${
+            className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-base font-bold transition cursor-pointer ${
               activeSection === 'dashboards'
                 ? 'bg-[#181a20] text-white border border-zinc-600 shadow-sm'
                 : 'text-zinc-300 hover:text-white hover:bg-zinc-800/60'
             }`}
           >
-            <LayoutDashboard className="w-5 h-5 text-zinc-300" />
-            <span>Dashboards</span>
+            <div className="flex items-center space-x-3">
+              <LayoutDashboard className="w-5 h-5 text-zinc-300" />
+              <span>Dashboards</span>
+            </div>
+            <span className="px-2 py-0.5 bg-amber-500/15 border border-amber-500/40 text-amber-300 text-[10px] font-extrabold rounded-md uppercase tracking-wider">
+              Power BI
+            </span>
           </button>
 
           {/* Data Sources */}

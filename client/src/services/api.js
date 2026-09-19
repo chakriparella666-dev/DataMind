@@ -134,3 +134,34 @@ export const getSystemStats = async () => {
   const res = await axios.get(`${API_BASE}/stats/overview`);
   return res.data;
 };
+
+// Power BI Dashboard & Reports API Calls
+export const getPowerBIReports = async () => {
+  const res = await axios.get(`${API_BASE}/powerbi`);
+  return res.data;
+};
+
+export const getPowerBIReportById = async (id) => {
+  const res = await axios.get(`${API_BASE}/powerbi/${id}`);
+  return res.data;
+};
+
+export const createPowerBIReport = async (data) => {
+  const res = await axios.post(`${API_BASE}/powerbi`, data);
+  return res.data;
+};
+
+export const updatePowerBIReport = async (id, data) => {
+  const res = await axios.put(`${API_BASE}/powerbi/${id}`, data);
+  return res.data;
+};
+
+export const deletePowerBIReport = async (id) => {
+  const res = await axios.delete(`${API_BASE}/powerbi/${id}`);
+  return res.data;
+};
+
+export const getPowerBIEmbedToken = async (data) => {
+  const res = await axios.post(`${API_BASE}/powerbi/embed-token`, data);
+  return res.data;
+};
