@@ -165,3 +165,22 @@ export const getPowerBIEmbedToken = async (data) => {
   const res = await axios.post(`${API_BASE}/powerbi/embed-token`, data);
   return res.data;
 };
+
+// Power BI Live Database & Automation API Calls
+export const getPowerBISchema = async () => {
+  const res = await axios.get(`${API_BASE}/powerbi/schema`);
+  return res.data;
+};
+
+export const getPowerBITableAnalytics = async (tableName, limit = 100) => {
+  const res = await axios.get(`${API_BASE}/powerbi/table-analytics/${encodeURIComponent(tableName)}`, {
+    params: { limit }
+  });
+  return res.data;
+};
+
+export const getPowerQueryMCode = async (tableName) => {
+  const res = await axios.get(`${API_BASE}/powerbi/powerquery-code/${encodeURIComponent(tableName)}`);
+  return res.data;
+};
+

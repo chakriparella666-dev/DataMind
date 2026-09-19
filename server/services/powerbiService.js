@@ -1,116 +1,241 @@
 /**
- * Power BI Integration Service
- * Provides token generation for Azure AD / Power BI REST APIs,
- * embed URL sanitization, and Power BI DAX query assistance.
+ * Power BI Integration & Live Database Service
+ * Provides automated 1-click Power BI Data Source (.pbids) generation,
+ * Power Query M-code generation, and live database telemetry for BI visuals.
  */
+
+const { appQuery, isPgConnected } = require('../config/db');
 
 /**
- * Sanitize or format a Power BI embed or publish URL
- * Supports publish-to-web (view?r=...), secure embed (reportEmbed?reportId=...), or raw iframe src
+ * Extract database host, port, db name, and user from connection string
  */
-function sanitizeEmbedUrl(url) {
-  if (!url) return '';
-  let clean = url.trim();
-
-  // Extract src if user pasted a full <iframe> snippet
-  const iframeSrcMatch = clean.match(/src=["']([^"']+)["']/i);
-  if (iframeSrcMatch && iframeSrcMatch[1]) {
-    clean = iframeSrcMatch[1];
+function parsePostgresConfig() {
+  const connStr = process.env.POSTGRES_URI || process.env.DATABASE_URL || 'postgresql://postgres:chakri@localhost:5432/datamind_app';
+  try {
+    const url = new URL(connStr);
+    return {
+      host: url.hostname,
+      port: url.port ? parseInt(url.port, 10) : 5432,
+      database: url.pathname.replace('/', '') || 'datamind_app',
+      user: url.username || 'postgres',
+      password: url.password || '',
+      ssl: connStr.includes('sslmode=require') || connStr.includes('render.com') || connStr.includes('amazonaws.com') || connStr.includes('neon') || connStr.includes('supabase')
+    };
+  } catch (err) {
+    return {
+      host: 'localhost',
+      port: 5432,
+      database: 'datamind_app',
+      user: 'postgres',
+      password: '',
+      ssl: false
+    };
   }
-
-  // Ensure https
-  if (clean.startsWith('http://')) {
-    clean = 'https://' + clean.slice(7);
-  }
-
-  return clean;
 }
 
 /**
- * Generate Azure AD Access Token & Power BI Embed Token
- * Used for App-Owns-Data / Service Principal embedding
+ * Generate standard Power BI Data Source (.pbids) connection file content
+ * Enables 1-click opening in Power BI Desktop
  */
-async function generatePowerBIEmbedToken({ tenantId, clientId, clientSecret, workspaceId, reportId }) {
-  if (!tenantId || !clientId || !clientSecret || !workspaceId || !reportId) {
-    throw new Error('Missing required Azure / Power BI credentials (tenantId, clientId, clientSecret, workspaceId, reportId)');
-  }
+function generatePbidsFile(selectedTable = null) {
+  const config = parsePostgresConfig();
 
-  // 1. Acquire Azure AD OAuth token for Power BI resource
-  const tokenEndpoint = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
-  const bodyParams = new URLSearchParams({
-    grant_type: 'client_credentials',
-    client_id: clientId,
-    client_secret: clientSecret,
-    scope: 'https://analysis.windows.net/powerbi/api/.default'
-  });
-
-  const aadResponse = await fetch(tokenEndpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: bodyParams.toString()
-  });
-
-  if (!aadResponse.ok) {
-    const errText = await aadResponse.text();
-    throw new Error(`Azure AD Authentication Failed (${aadResponse.status}): ${errText}`);
-  }
-
-  const aadData = await aadResponse.json();
-  const aadAccessToken = aadData.access_token;
-
-  // 2. Fetch Report Metadata to get datasetId and embedUrl
-  const reportUrl = `https://api.powerbi.com/v1.0/myorg/groups/${workspaceId}/reports/${reportId}`;
-  const reportResponse = await fetch(reportUrl, {
-    headers: {
-      Authorization: `Bearer ${aadAccessToken}`,
-      'Content-Type': 'application/json'
-    }
-  });
-
-  if (!reportResponse.ok) {
-    const errText = await reportResponse.text();
-    throw new Error(`Failed to fetch Power BI Report (${reportResponse.status}): ${errText}`);
-  }
-
-  const reportData = await reportResponse.json();
-  const datasetId = reportData.datasetId;
-  const embedUrl = reportData.embedUrl;
-
-  // 3. Generate Power BI Embed Token (V2 GenerateToken API)
-  const generateTokenUrl = 'https://api.powerbi.com/v1.0/myorg/GenerateToken';
-  const tokenPayload = {
-    reports: [{ id: reportId }],
-    datasets: datasetId ? [{ id: datasetId }] : [],
-    targetWorkspaces: [{ id: workspaceId }]
+  const pbidsObject = {
+    version: '0.1',
+    connections: [
+      {
+        details: {
+          protocol: 'postgresql',
+          address: {
+            server: config.host + (config.port && config.port !== 5432 ? `:${config.port}` : ''),
+            database: config.database
+          },
+          authentication: null,
+          query: selectedTable ? `SELECT * FROM "${selectedTable}";` : null
+        },
+        options: {
+          CreateNavigationProperties: true
+        },
+        mode: 'DirectQuery'
+      }
+    ]
   };
 
-  const embedTokenResponse = await fetch(generateTokenUrl, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${aadAccessToken}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(tokenPayload)
-  });
+  return {
+    filename: `DataMind_${config.database}_Live.pbids`,
+    content: JSON.stringify(pbidsObject, null, 2),
+    config
+  };
+}
 
-  if (!embedTokenResponse.ok) {
-    const errText = await embedTokenResponse.text();
-    throw new Error(`Failed to generate Embed Token (${embedTokenResponse.status}): ${errText}`);
+/**
+ * Generate Power Query M-Code for 1-click copy-paste into Power BI Desktop Power Query Advanced Editor
+ */
+function generatePowerQueryMCode(tableName) {
+  const config = parsePostgresConfig();
+  const serverStr = `"${config.host}${config.port && config.port !== 5432 ? ':' + config.port : ''}"`;
+  const dbStr = `"${config.database}"`;
+
+  if (tableName) {
+    return `// Power Query M Script for Table: ${tableName}
+let
+    Source = PostgreSQL.Database(${serverStr}, ${dbStr}),
+    public_Schema = Source{[Schema="public"]}[Data],
+    TargetTable = public_Schema{[Item="${tableName}"]}[Data]
+in
+    TargetTable`;
   }
 
-  const embedTokenData = await embedTokenResponse.json();
+  return `// Power Query M Script for DataMind PostgreSQL Database
+let
+    Source = PostgreSQL.Database(${serverStr}, ${dbStr}),
+    public_Schema = Source{[Schema="public"]}[Data]
+in
+    public_Schema`;
+}
+
+/**
+ * Fetch real live tables, row counts, and columns directly from PostgreSQL
+ */
+async function getLiveDatabaseSchema() {
+  if (!isPgConnected()) {
+    throw new Error('Database is not connected');
+  }
+
+  // Fetch real tables
+  const tablesRes = await appQuery(`
+    SELECT table_name 
+    FROM information_schema.tables 
+    WHERE table_schema = 'public' 
+      AND table_type = 'BASE TABLE'
+    ORDER BY table_name ASC;
+  `);
+
+  const tableNames = tablesRes.rows.map(r => r.table_name);
+  const tablesInfo = [];
+
+  for (const tName of tableNames) {
+    try {
+      // Get row count
+      const countRes = await appQuery(`SELECT COUNT(*) AS total FROM "${tName}";`);
+      const rowCount = parseInt(countRes.rows[0]?.total || 0, 10);
+
+      // Get columns
+      const colsRes = await appQuery(`
+        SELECT column_name, data_type, is_nullable
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' AND table_name = $1
+        ORDER BY ordinal_position ASC;
+      `, [tName]);
+
+      tablesInfo.push({
+        tableName: tName,
+        rowCount,
+        columns: colsRes.rows.map(c => ({
+          name: c.column_name,
+          type: c.data_type,
+          nullable: c.is_nullable === 'YES'
+        }))
+      });
+    } catch (err) {
+      console.warn(`[PowerBI Service] Could not introspect table "${tName}":`, err.message);
+    }
+  }
 
   return {
-    accessToken: embedTokenData.token,
-    tokenId: embedTokenData.tokenId,
-    expiration: embedTokenData.expiration,
-    embedUrl: embedUrl,
-    reportId: reportId,
-    datasetId: datasetId
+    dbConfig: parsePostgresConfig(),
+    totalTables: tablesInfo.length,
+    totalRows: tablesInfo.reduce((acc, t) => acc + t.rowCount, 0),
+    tables: tablesInfo
+  };
+}
+
+/**
+ * Fetch live data and dynamic visual aggregations from any table in the database
+ */
+async function getLiveTableAnalytics(tableName, limit = 100) {
+  if (!isPgConnected()) {
+    throw new Error('Database is not connected');
+  }
+
+  // Verify table exists to avoid SQL injection
+  const verifyRes = await appQuery(`
+    SELECT table_name 
+    FROM information_schema.tables 
+    WHERE table_schema = 'public' AND table_name = $1;
+  `, [tableName]);
+
+  if (verifyRes.rows.length === 0) {
+    throw new Error(`Table "${tableName}" does not exist in the database`);
+  }
+
+  // Get total rows
+  const countRes = await appQuery(`SELECT COUNT(*) AS total FROM "${tableName}";`);
+  const totalRows = parseInt(countRes.rows[0]?.total || 0, 10);
+
+  // Get columns
+  const colsRes = await appQuery(`
+    SELECT column_name, data_type 
+    FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = $1
+    ORDER BY ordinal_position ASC;
+  `, [tableName]);
+  const columns = colsRes.rows;
+
+  // Fetch sample rows
+  const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 500);
+  const rowsRes = await appQuery(`SELECT * FROM "${tableName}" LIMIT $1;`, [safeLimit]);
+  const rows = rowsRes.rows;
+
+  // Identify numeric, text, and date columns for automated BI charts
+  const numericCols = columns.filter(c => ['integer', 'bigint', 'numeric', 'double precision', 'real', 'smallint', 'decimal'].includes(c.data_type.toLowerCase())).map(c => c.column_name);
+  const textCols = columns.filter(c => ['character varying', 'varchar', 'text', 'character', 'char'].includes(c.data_type.toLowerCase())).map(c => c.column_name);
+
+  // Compute aggregations dynamically from real data
+  const aggregations = {};
+
+  if (numericCols.length > 0) {
+    const aggClauses = numericCols.slice(0, 4).map(c => `AVG("${c}") AS "avg_${c}", SUM("${c}") AS "sum_${c}", MIN("${c}") AS "min_${c}", MAX("${c}") AS "max_${c}"`).join(', ');
+    try {
+      const numAggRes = await appQuery(`SELECT ${aggClauses} FROM "${tableName}";`);
+      aggregations.numeric = numAggRes.rows[0];
+    } catch (e) {
+      // Ignore if column contains non-coercible types
+    }
+  }
+
+  // Compute top category distribution if text columns exist
+  let categoryDistribution = [];
+  if (textCols.length > 0) {
+    const groupCol = textCols[0];
+    try {
+      const distRes = await appQuery(`
+        SELECT "${groupCol}" AS label, COUNT(*) AS count 
+        FROM "${tableName}" 
+        WHERE "${groupCol}" IS NOT NULL 
+        GROUP BY "${groupCol}" 
+        ORDER BY count DESC 
+        LIMIT 8;
+      `);
+      categoryDistribution = distRes.rows;
+    } catch (e) {}
+  }
+
+  return {
+    tableName,
+    totalRows,
+    columns: columns.map(c => ({ name: c.column_name, type: c.data_type })),
+    rows,
+    aggregations,
+    categoryDistribution,
+    powerQueryCode: generatePowerQueryMCode(tableName)
   };
 }
 
 module.exports = {
-  sanitizeEmbedUrl,
-  generatePowerBIEmbedToken
+  parsePostgresConfig,
+  generatePbidsFile,
+  generatePowerQueryMCode,
+  getLiveDatabaseSchema,
+  getLiveTableAnalytics
 };
