@@ -184,3 +184,13 @@ export const getPowerQueryMCode = async (tableName) => {
   return res.data;
 };
 
+export const getPowerBIQueries = async () => {
+  const res = await axios.get(`${API_BASE}/powerbi/queries`);
+  return res.data;
+};
+
+export const executePowerBIQuery = async ({ sql, question }) => {
+  const res = await axios.post(`${API_BASE}/powerbi/execute-query`, { sql, question });
+  return res.data;
+};
+

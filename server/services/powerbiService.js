@@ -1,7 +1,7 @@
 /**
- * Power BI Integration & Live Database Service
- * Provides automated 1-click Power BI Data Source (.pbids) generation,
- * Power Query M-code generation, and live database telemetry for BI visuals.
+ * Power BI Integration & SQL Query Dashboard Service
+ * Executes generated SQL queries on PostgreSQL and transforms results into
+ * rich Power BI-style BI visual analytics, KPIs, and Power Query M-scripts.
  */
 
 const { appQuery, isPgConnected } = require('../config/db');
@@ -35,7 +35,6 @@ function parsePostgresConfig() {
 
 /**
  * Generate standard Power BI Data Source (.pbids) connection file content
- * Enables 1-click opening in Power BI Desktop without syntax errors
  */
 function generatePbidsFile() {
   const config = parsePostgresConfig();
@@ -66,173 +65,160 @@ function generatePbidsFile() {
 }
 
 /**
- * Generate Power Query M-Code for 1-click copy-paste into Power BI Desktop Power Query Advanced Editor
+ * Generate Power Query M-Code for a specific SQL query
  */
-function generatePowerQueryMCode(tableName) {
+function generateQueryPowerQueryMCode(sql) {
   const config = parsePostgresConfig();
   const serverStr = `"${config.host}${config.port && config.port !== 5432 ? ':' + config.port : ''}"`;
   const dbStr = `"${config.database}"`;
+  const cleanSql = sql ? sql.replace(/"/g, '""').trim() : 'SELECT 1;';
 
-  if (tableName) {
-    return `// Power Query M Script for Table: ${tableName}
+  return `// Power Query M Script for Generated SQL Query
 let
-    Source = PostgreSQL.Database(${serverStr}, ${dbStr}),
-    public_Schema = Source{[Schema="public"]}[Data],
-    TargetTable = public_Schema{[Item="${tableName}"]}[Data]
+    Source = PostgreSQL.Database(${serverStr}, ${dbStr}, [Query="${cleanSql}"])
 in
-    TargetTable`;
-  }
-
-  return `// Power Query M Script for DataMind PostgreSQL Database
-let
-    Source = PostgreSQL.Database(${serverStr}, ${dbStr}),
-    public_Schema = Source{[Schema="public"]}[Data]
-in
-    public_Schema`;
+    Source`;
 }
 
 /**
- * Fetch real live tables, row counts, and columns directly from PostgreSQL
+ * Execute a generated SQL query and transform into Power BI Dashboard analytics
  */
-async function getLiveDatabaseSchema() {
+async function executeSqlQueryForPowerBI(sql, question = 'Custom SQL Query') {
   if (!isPgConnected()) {
     throw new Error('Database is not connected');
   }
 
-  // Fetch real tables
-  const tablesRes = await appQuery(`
-    SELECT table_name 
-    FROM information_schema.tables 
-    WHERE table_schema = 'public' 
-      AND table_type = 'BASE TABLE'
-    ORDER BY table_name ASC;
-  `);
+  if (!sql || !sql.trim()) {
+    throw new Error('No SQL query provided to execute');
+  }
 
-  const tableNames = tablesRes.rows.map(r => r.table_name);
-  const tablesInfo = [];
+  const startTime = Date.now();
+  const res = await appQuery(sql);
+  const executionTimeMs = Date.now() - startTime;
 
-  for (const tName of tableNames) {
-    try {
-      // Get row count
-      const countRes = await appQuery(`SELECT COUNT(*) AS total FROM "${tName}";`);
-      const rowCount = parseInt(countRes.rows[0]?.total || 0, 10);
+  const rows = res.rows || [];
+  const totalRows = rows.length;
 
-      // Get columns
-      const colsRes = await appQuery(`
-        SELECT column_name, data_type, is_nullable
-        FROM information_schema.columns 
-        WHERE table_schema = 'public' AND table_name = $1
-        ORDER BY ordinal_position ASC;
-      `, [tName]);
+  if (rows.length === 0) {
+    const fields = res.fields ? res.fields.map(f => f.name) : [];
+    return {
+      sql,
+      question,
+      executionTimeMs,
+      totalRows: 0,
+      columns: fields.map(f => ({ name: f, type: 'text' })),
+      rows: [],
+      kpis: [],
+      chartConfig: { chartType: 'bar', xAxisKey: fields[0] || '', yAxisKeys: [] },
+      powerQueryCode: generateQueryPowerQueryMCode(sql)
+    };
+  }
 
-      tablesInfo.push({
-        tableName: tName,
-        rowCount,
-        columns: colsRes.rows.map(c => ({
-          name: c.column_name,
-          type: c.data_type,
-          nullable: c.is_nullable === 'YES'
-        }))
+  const sampleRow = rows[0];
+  const colNames = Object.keys(sampleRow);
+
+  // Classify column types (numeric vs text/date)
+  const columns = colNames.map(name => {
+    const isNum = rows.some(r => r[name] !== null && r[name] !== undefined && !isNaN(Number(r[name])) && String(r[name]).trim() !== '' && typeof r[name] !== 'boolean');
+    return {
+      name,
+      type: isNum ? 'numeric' : 'text'
+    };
+  });
+
+  const numericCols = columns.filter(c => c.type === 'numeric').map(c => c.name);
+  const textCols = columns.filter(c => c.type !== 'numeric').map(c => c.name);
+
+  // Compute KPI metric cards (SUM, AVG, MIN, MAX) for each numeric column
+  const kpis = [];
+  kpis.push({
+    label: 'Total Query Rows',
+    value: totalRows.toLocaleString(),
+    subtitle: 'Returned in ' + executionTimeMs + 'ms',
+    type: 'count'
+  });
+
+  for (const numCol of numericCols.slice(0, 4)) {
+    const vals = rows.map(r => Number(r[numCol])).filter(v => !isNaN(v) && v !== null);
+    if (vals.length > 0) {
+      const sum = vals.reduce((a, b) => a + b, 0);
+      const avg = sum / vals.length;
+      const min = Math.min(...vals);
+      const max = Math.max(...vals);
+
+      const isFloat = vals.some(v => v % 1 !== 0);
+      const formatNum = (n) => isFloat ? Number(n.toFixed(2)).toLocaleString() : Math.round(n).toLocaleString();
+
+      kpis.push({
+        label: `Total ${numCol.replace(/_/g, ' ')}`,
+        value: formatNum(sum),
+        subtitle: `Avg: ${formatNum(avg)} | Min: ${formatNum(min)} | Max: ${formatNum(max)}`,
+        type: 'metric'
       });
-    } catch (err) {
-      console.warn(`[PowerBI Service] Could not introspect table "${tName}":`, err.message);
     }
   }
 
+  // Determine smart chart axes
+  const xAxisKey = textCols[0] || colNames[0];
+  const yAxisKeys = numericCols.length > 0 ? numericCols : [];
+
+  let chartType = 'bar';
+  if (xAxisKey && (xAxisKey.toLowerCase().includes('date') || xAxisKey.toLowerCase().includes('year') || xAxisKey.toLowerCase().includes('month') || xAxisKey.toLowerCase().includes('day') || xAxisKey.toLowerCase().includes('time'))) {
+    chartType = 'line';
+  } else if (rows.length <= 6 && yAxisKeys.length === 1) {
+    chartType = 'donut';
+  }
+
   return {
-    dbConfig: parsePostgresConfig(),
-    totalTables: tablesInfo.length,
-    totalRows: tablesInfo.reduce((acc, t) => acc + t.rowCount, 0),
-    tables: tablesInfo
+    sql,
+    question,
+    executionTimeMs,
+    totalRows,
+    columns,
+    rows,
+    kpis,
+    chartConfig: {
+      chartType,
+      xAxisKey,
+      yAxisKeys,
+      title: `${question || 'SQL Query Results'}`
+    },
+    powerQueryCode: generateQueryPowerQueryMCode(sql)
   };
 }
 
 /**
- * Fetch live data and dynamic visual aggregations from any table in the database
+ * Fetch all saved SQL queries / dashboards for the user
  */
-async function getLiveTableAnalytics(tableName, limit = 100) {
-  if (!isPgConnected()) {
-    throw new Error('Database is not connected');
+async function getSavedSqlQueries(userId = null) {
+  if (!isPgConnected()) return [];
+
+  let query = `
+    SELECT d.id, d.name, d.question, d.sql, d.data_source_id AS "dataSourceId",
+           ds.name AS "dataSourceName", d.widgets, d.created_at AS "createdAt"
+    FROM dashboards d
+    LEFT JOIN data_sources ds ON (d.data_source_id::text = ds.id::text)
+    WHERE d.sql IS NOT NULL AND TRIM(d.sql) != ''
+  `;
+  const params = [];
+  if (userId) {
+    query += ` AND (d.user_id = $1 OR d.user_id = 'default_user' OR d.visibility = 'Public')`;
+    params.push(String(userId));
   }
+  query += ` ORDER BY d.created_at DESC;`;
 
-  // Verify table exists to avoid SQL injection
-  const verifyRes = await appQuery(`
-    SELECT table_name 
-    FROM information_schema.tables 
-    WHERE table_schema = 'public' AND table_name = $1;
-  `, [tableName]);
-
-  if (verifyRes.rows.length === 0) {
-    throw new Error(`Table "${tableName}" does not exist in the database`);
-  }
-
-  // Get total rows
-  const countRes = await appQuery(`SELECT COUNT(*) AS total FROM "${tableName}";`);
-  const totalRows = parseInt(countRes.rows[0]?.total || 0, 10);
-
-  // Get columns
-  const colsRes = await appQuery(`
-    SELECT column_name, data_type 
-    FROM information_schema.columns 
-    WHERE table_schema = 'public' AND table_name = $1
-    ORDER BY ordinal_position ASC;
-  `, [tableName]);
-  const columns = colsRes.rows;
-
-  // Fetch sample rows
-  const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 500);
-  const rowsRes = await appQuery(`SELECT * FROM "${tableName}" LIMIT $1;`, [safeLimit]);
-  const rows = rowsRes.rows;
-
-  // Identify numeric, text, and date columns for automated BI charts
-  const numericCols = columns.filter(c => ['integer', 'bigint', 'numeric', 'double precision', 'real', 'smallint', 'decimal'].includes(c.data_type.toLowerCase())).map(c => c.column_name);
-  const textCols = columns.filter(c => ['character varying', 'varchar', 'text', 'character', 'char'].includes(c.data_type.toLowerCase())).map(c => c.column_name);
-
-  // Compute aggregations dynamically from real data
-  const aggregations = {};
-
-  if (numericCols.length > 0) {
-    const aggClauses = numericCols.slice(0, 4).map(c => `AVG("${c}") AS "avg_${c}", SUM("${c}") AS "sum_${c}", MIN("${c}") AS "min_${c}", MAX("${c}") AS "max_${c}"`).join(', ');
-    try {
-      const numAggRes = await appQuery(`SELECT ${aggClauses} FROM "${tableName}";`);
-      aggregations.numeric = numAggRes.rows[0];
-    } catch (e) {
-      // Ignore if column contains non-coercible types
-    }
-  }
-
-  // Compute top category distribution if text columns exist
-  let categoryDistribution = [];
-  if (textCols.length > 0) {
-    const groupCol = textCols[0];
-    try {
-      const distRes = await appQuery(`
-        SELECT "${groupCol}" AS label, COUNT(*) AS count 
-        FROM "${tableName}" 
-        WHERE "${groupCol}" IS NOT NULL 
-        GROUP BY "${groupCol}" 
-        ORDER BY count DESC 
-        LIMIT 8;
-      `);
-      categoryDistribution = distRes.rows;
-    } catch (e) {}
-  }
-
-  return {
-    tableName,
-    totalRows,
-    columns: columns.map(c => ({ name: c.column_name, type: c.data_type })),
-    rows,
-    aggregations,
-    categoryDistribution,
-    powerQueryCode: generatePowerQueryMCode(tableName)
-  };
+  const res = await appQuery(query, params);
+  return res.rows.map(r => ({
+    ...r,
+    _id: r.id.toString(),
+    title: r.question || r.name || 'SQL Query'
+  }));
 }
 
 module.exports = {
   parsePostgresConfig,
   generatePbidsFile,
-  generatePowerQueryMCode,
-  getLiveDatabaseSchema,
-  getLiveTableAnalytics
+  generateQueryPowerQueryMCode,
+  executeSqlQueryForPowerBI,
+  getSavedSqlQueries
 };

@@ -1,42 +1,50 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Download, Copy, CheckCheck, RefreshCw, Database, Table, BarChart2,
-  Sparkles, ExternalLink, Layers, Check, AlertCircle, ArrowUpRight,
-  Code, Filter, ChevronRight, FileSpreadsheet, Eye, Plus, Trash2, X,
-  FileText, Activity, ShieldCheck, Cpu, Play
+  Download, Copy, CheckCheck, RefreshCw, Database, BarChart2,
+  Sparkles, Layers, Check, AlertCircle, Code, Filter,
+  FileSpreadsheet, Play, Activity, Search,
+  ChevronRight, Terminal, PieChart, TrendingUp, BarChart3, X
 } from 'lucide-react';
 import {
-  getPowerBISchema,
-  getPowerBITableAnalytics,
-  getPowerQueryMCode,
-  getPowerBIReports,
-  createPowerBIReport,
-  deletePowerBIReport
+  BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart as RechartsPie,
+  Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+} from 'recharts';
+import {
+  getPowerBIQueries,
+  executePowerBIQuery,
+  getPowerBISchema
 } from '../services/api';
 
+const PALETTE = [
+  '#f59e0b', '#3b82f6', '#10b981', '#8b5cf6', '#ec4899',
+  '#06b6d4', '#f97316', '#14b8a6', '#6366f1', '#84cc16'
+];
+
 export default function PowerBIViewer({ onNavigate }) {
-  // Schema & Database State
+  // Queries & Active Dashboard State
+  const [queriesList, setQueriesList] = useState([]);
+  const [activeQuery, setActiveQuery] = useState(null);
+  const [dashboardData, setDashboardData] = useState(null);
   const [schemaData, setSchemaData] = useState(null);
-  const [selectedTable, setSelectedTable] = useState('');
-  const [tableAnalytics, setTableAnalytics] = useState(null);
-  const [loadingSchema, setLoadingSchema] = useState(true);
-  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+
+  // UI & Loading States
+  const [loadingList, setLoadingList] = useState(true);
+  const [loadingDashboard, setLoadingDashboard] = useState(false);
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
+  const [activeChartType, setActiveChartType] = useState('bar'); // 'bar' | 'line' | 'area' | 'donut'
+  const [filterText, setFilterText] = useState('');
 
-  // Power BI Custom Published Reports
-  const [customReports, setCustomReports] = useState([]);
-  const [activeCustomReport, setActiveCustomReport] = useState(null);
-  const [viewMode, setViewMode] = useState('live_database'); // 'live_database' | 'embedded_report'
+  // Custom Query Bar State
+  const [customSql, setCustomSql] = useState('');
+  const [customQuestion, setCustomQuestion] = useState('');
+  const [isEditingSql, setIsEditingSql] = useState(false);
 
-  // Clipboard & Automation states
-  const [copiedMCode, setCopiedMCode] = useState(false);
-  const [copiedFeedUrl, setCopiedFeedUrl] = useState(false);
-  const [copiedField, setCopiedField] = useState('');
-  const [mCodeText, setMCodeText] = useState('');
+  // Modals & Clipboard States
   const [showMCodeModal, setShowMCodeModal] = useState(false);
   const [showPbidsModal, setShowPbidsModal] = useState(false);
-  const [isAddingReport, setIsAddingReport] = useState(false);
+  const [copiedMCode, setCopiedMCode] = useState(false);
+  const [copiedField, setCopiedField] = useState('');
 
   // DAX Copilot State
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
@@ -44,69 +52,81 @@ export default function PowerBIViewer({ onNavigate }) {
   const [daxResult, setDaxResult] = useState(null);
   const [isGeneratingDax, setIsGeneratingDax] = useState(false);
 
-  // New Custom Report Form
-  const [formReport, setFormReport] = useState({
-    name: '',
-    description: '',
-    embedUrl: '',
-    category: 'Executive'
-  });
-
-  // Fetch Live Database Schema on mount
-  const fetchLiveSchema = async () => {
-    setLoadingSchema(true);
+  // Load Saved SQL Queries on Mount
+  const fetchQueriesAndInit = async () => {
+    setLoadingList(true);
     setError(null);
     try {
-      const [schemaRes, reportsRes] = await Promise.all([
-        getPowerBISchema(),
-        getPowerBIReports()
+      const [queriesRes, schemaRes] = await Promise.all([
+        getPowerBIQueries(),
+        getPowerBISchema()
       ]);
 
       if (schemaRes.success) {
         setSchemaData(schemaRes);
-        if (schemaRes.tables && schemaRes.tables.length > 0) {
-          const firstTbl = schemaRes.tables[0].tableName;
-          setSelectedTable(firstTbl);
-          loadTableData(firstTbl);
-        }
       }
 
-      if (reportsRes.success && Array.isArray(reportsRes.reports)) {
-        setCustomReports(reportsRes.reports);
+      if (queriesRes.success && Array.isArray(queriesRes.queries) && queriesRes.queries.length > 0) {
+        setQueriesList(queriesRes.queries);
+        const initial = queriesRes.queries[0];
+        setActiveQuery(initial);
+        runQueryDashboard(initial.sql, initial.question || initial.name);
+      } else {
+        // Fallback default query if no dashboards exist yet
+        const defaultSql = `SELECT name_of_emp, department, designation, salary FROM tbl_sheet1_604870 LIMIT 10;`;
+        runQueryDashboard(defaultSql, 'Sample Employee Salary Distribution');
       }
     } catch (err) {
-      console.error('[PowerBI] Schema load failed:', err);
-      setError(err.response?.data?.error || err.message || 'Failed to connect to live database schema.');
+      console.error('[PowerBI] Failed to load queries:', err);
+      setError(err.response?.data?.error || err.message || 'Failed to fetch SQL queries');
     } finally {
-      setLoadingSchema(false);
+      setLoadingList(false);
     }
   };
 
   useEffect(() => {
-    fetchLiveSchema();
+    fetchQueriesAndInit();
   }, []);
 
-  // Fetch Live Table Records & BI Metrics
-  const loadTableData = async (tableName) => {
-    if (!tableName) return;
-    setLoadingAnalytics(true);
+  // Run SQL Query and build Power BI Dashboard
+  const runQueryDashboard = async (sqlString, questionString) => {
+    if (!sqlString || !sqlString.trim()) return;
+    setLoadingDashboard(true);
+    setError(null);
     try {
-      const res = await getPowerBITableAnalytics(tableName, 50);
-      if (res.success && res.analytics) {
-        setTableAnalytics(res.analytics);
-        setMCodeText(res.analytics.powerQueryCode || '');
+      const res = await executePowerBIQuery({
+        sql: sqlString.trim(),
+        question: questionString || 'SQL Query Result'
+      });
+
+      if (res.success && res.dashboard) {
+        setDashboardData(res.dashboard);
+        setCustomSql(sqlString.trim());
+        setCustomQuestion(questionString || '');
+        if (res.dashboard.chartConfig?.chartType) {
+          setActiveChartType(res.dashboard.chartConfig.chartType === 'donut' ? 'donut' : res.dashboard.chartConfig.chartType);
+        }
+      } else {
+        setError(res.error || 'Failed to generate Power BI dashboard');
       }
     } catch (err) {
-      console.error('[PowerBI] Table analytics load failed:', err);
-      setError(`Failed to load data for table "${tableName}".`);
+      console.error('[PowerBI] Query execution failed:', err);
+      setError(err.response?.data?.error || err.message || 'SQL execution failed');
     } finally {
-      setLoadingAnalytics(false);
+      setLoadingDashboard(false);
     }
   };
 
-  const handleSelectTable = (tblName) => {
-    setSelectedTable(tblName);
-    loadTableData(tblName);
+  const handleSelectSavedQuery = (qObj) => {
+    setActiveQuery(qObj);
+    setIsEditingSql(false);
+    runQueryDashboard(qObj.sql, qObj.question || qObj.name);
+  };
+
+  const handleRunCustomQuery = (e) => {
+    e.preventDefault();
+    if (!customSql.trim()) return;
+    runQueryDashboard(customSql, customQuestion || 'Custom SQL Query');
   };
 
   // 1-Click PBIDS Download Handler
@@ -121,6 +141,7 @@ export default function PowerBIViewer({ onNavigate }) {
     setShowPbidsModal(true);
   };
 
+  // Copy helper
   const handleCopyText = (text, fieldName) => {
     if (!text) return;
     navigator.clipboard.writeText(text);
@@ -128,35 +149,14 @@ export default function PowerBIViewer({ onNavigate }) {
     setTimeout(() => setCopiedField(''), 2500);
   };
 
-  // 1-Click Copy Power Query M-Code
-  const handleCopyMCode = () => {
-    if (mCodeText) {
-      navigator.clipboard.writeText(mCodeText);
-      setCopiedMCode(true);
-      setTimeout(() => setCopiedMCode(false), 2500);
-    }
-  };
-
-  // 1-Click Copy Live REST Data Feed URL
-  const handleCopyFeedUrl = () => {
-    const feedUrl = `${window.location.origin}/api/powerbi/feed?table=${encodeURIComponent(selectedTable || '')}`;
-    navigator.clipboard.writeText(feedUrl);
-    setCopiedFeedUrl(true);
-    setSuccessMsg('Live Web Connector Feed URL copied! In Power BI: Get Data -> Web -> paste this URL.');
-    setTimeout(() => {
-      setCopiedFeedUrl(false);
-      setSuccessMsg(null);
-    }, 5000);
-  };
-
-  // 1-Click Export Table Rows to CSV
+  // Export Table Rows to CSV
   const handleExportCsv = () => {
-    if (!tableAnalytics?.rows || tableAnalytics.rows.length === 0) return;
-    const cols = tableAnalytics.columns.map(c => c.name);
+    if (!dashboardData?.rows || dashboardData.rows.length === 0) return;
+    const cols = dashboardData.columns.map(c => c.name);
     const csvRows = [];
     csvRows.push(cols.join(','));
 
-    for (const row of tableAnalytics.rows) {
+    for (const row of dashboardData.rows) {
       const values = cols.map(col => {
         const val = row[col];
         if (val === null || val === undefined) return '""';
@@ -169,268 +169,208 @@ export default function PowerBIViewer({ onNavigate }) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${selectedTable || 'database_data'}_export.csv`;
+    link.download = `${(dashboardData.question || 'sql_query').replace(/\s+/g, '_')}_results.csv`;
     link.click();
   };
 
-  // Generate DAX Measure with AI Copilot
+  // Generate DAX with Copilot for active SQL columns
   const handleGenerateDax = (e) => {
     e.preventDefault();
-    if (!daxPrompt.trim() || !selectedTable) return;
+    if (!daxPrompt.trim() || !dashboardData) return;
 
     setIsGeneratingDax(true);
     setDaxResult(null);
 
     setTimeout(() => {
       const promptLower = daxPrompt.toLowerCase();
-      const colNames = tableAnalytics?.columns?.map(c => c.name) || [];
-      const firstNumCol = tableAnalytics?.columns?.find(c => ['integer', 'bigint', 'numeric', 'double precision', 'real'].includes(c.type?.toLowerCase()))?.name || colNames[0] || 'Amount';
+      const numCols = dashboardData.columns.filter(c => c.type === 'numeric').map(c => c.name);
+      const metricCol = numCols[0] || 'MetricValue';
 
       let dax = {};
       if (promptLower.includes('growth') || promptLower.includes('yoy')) {
         dax = {
-          name: `YoY_${firstNumCol}_Growth`,
-          formula: `${firstNumCol} YoY % = \nVAR CurrentVal = SUM('${selectedTable}'[${firstNumCol}])\nVAR PriorVal = CALCULATE(SUM('${selectedTable}'[${firstNumCol}]), SAMEPERIODLASTYEAR('Calendar'[Date]))\nRETURN\n    DIVIDE(CurrentVal - PriorVal, PriorVal, 0)`,
-          explanation: `Calculates Year-Over-Year percentage growth for column [${firstNumCol}] on table '${selectedTable}'.`
+          name: `YoY_${metricCol}_Growth`,
+          formula: `${metricCol} YoY % = \nVAR CurrentVal = SUM('QueryResult'[${metricCol}])\nVAR PriorVal = CALCULATE(SUM('QueryResult'[${metricCol}]), SAMEPERIODLASTYEAR('Calendar'[Date]))\nRETURN\n    DIVIDE(CurrentVal - PriorVal, PriorVal, 0)`,
+          explanation: `Calculates Year-Over-Year percentage growth for measure [${metricCol}].`
         };
-      } else if (promptLower.includes('margin') || promptLower.includes('profit') || promptLower.includes('average')) {
+      } else if (promptLower.includes('margin') || promptLower.includes('average') || promptLower.includes('avg')) {
         dax = {
-          name: `Avg_${firstNumCol}`,
-          formula: `Average ${firstNumCol} = \nAVERAGE('${selectedTable}'[${firstNumCol}])`,
-          explanation: `Calculates dynamic weighted average for [${firstNumCol}] in '${selectedTable}'.`
+          name: `Average_${metricCol}`,
+          formula: `Average ${metricCol} = \nAVERAGE('QueryResult'[${metricCol}])`,
+          explanation: `Calculates dynamic average for [${metricCol}] across selected dimensions.`
         };
       } else if (promptLower.includes('rank') || promptLower.includes('top')) {
         dax = {
-          name: `Rank_By_${firstNumCol}`,
-          formula: `Rank by ${firstNumCol} = \nRANKX(\n    ALL('${selectedTable}'),\n    CALCULATE(SUM('${selectedTable}'[${firstNumCol}])),\n    ,\n    DESC,\n    Dense\n)`,
-          explanation: `Ranks rows in '${selectedTable}' in descending order by [${firstNumCol}].`
+          name: `Rank_By_${metricCol}`,
+          formula: `Rank by ${metricCol} = \nRANKX(\n    ALL('QueryResult'),\n    CALCULATE(SUM('QueryResult'[${metricCol}])),\n    ,\n    DESC,\n    Dense\n)`,
+          explanation: `Ranks rows in descending order by [${metricCol}].`
         };
       } else {
         dax = {
-          name: `Total_${firstNumCol}`,
-          formula: `Total ${firstNumCol} = \nCALCULATE(\n    SUM('${selectedTable}'[${firstNumCol}]),\n    ALLSELECTED('${selectedTable}')\n)`,
-          explanation: `DAX measure calculating aggregated sum for column [${firstNumCol}].`
+          name: `Total_${metricCol}`,
+          formula: `Total ${metricCol} = \nCALCULATE(\n    SUM('QueryResult'[${metricCol}]),\n    ALLSELECTED('QueryResult')\n)`,
+          explanation: `Aggregates [${metricCol}] with dynamic filter context.`
         };
       }
 
       setDaxResult(dax);
       setIsGeneratingDax(false);
-    }, 500);
+    }, 450);
   };
 
-  // Add Custom Embedded Report
-  const handleAddCustomReport = async (e) => {
-    e.preventDefault();
-    if (!formReport.name.trim() || !formReport.embedUrl.trim()) return;
-
-    try {
-      const res = await createPowerBIReport(formReport);
-      if (res.success && res.report) {
-        setCustomReports(prev => [res.report, ...prev]);
-        setActiveCustomReport(res.report);
-        setViewMode('embedded_report');
-        setIsAddingReport(false);
-        setFormReport({ name: '', description: '', embedUrl: '', category: 'Executive' });
-        setSuccessMsg(`Power BI Report "${res.report.name}" connected!`);
-        setTimeout(() => setSuccessMsg(null), 4000);
-      }
-    } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Failed to save Power BI report');
-    }
-  };
-
-  // Delete Custom Report
-  const handleDeleteCustomReport = async (id, e) => {
-    e?.stopPropagation();
-    if (!window.confirm('Are you sure you want to delete this report?')) return;
-    try {
-      const res = await deletePowerBIReport(id);
-      if (res.success) {
-        setCustomReports(prev => prev.filter(r => String(r.id || r._id) !== String(id)));
-        if (String(activeCustomReport?.id || activeCustomReport?._id) === String(id)) {
-          setViewMode('live_database');
-          setActiveCustomReport(null);
-        }
-      }
-    } catch (err) {
-      setError('Failed to delete report');
-    }
-  };
+  // Filtered rows
+  const filteredRows = dashboardData?.rows ? dashboardData.rows.filter(row => {
+    if (!filterText.trim()) return true;
+    return Object.values(row).some(v => String(v || '').toLowerCase().includes(filterText.toLowerCase()));
+  }) : [];
 
   return (
     <div className="flex-1 flex flex-col h-full bg-[#111318] text-slate-100 font-sans antialiased overflow-hidden select-none">
       
-      {/* Top Main Navigation & Automation Toolbar */}
+      {/* Top Header & 1-Click Automation Bar */}
       <div className="bg-[#181a20] border-b border-[#2a2d36] px-5 py-3.5 flex flex-wrap items-center justify-between gap-3 shrink-0 shadow-md">
         
-        {/* Left: DB Connection Indicator */}
-        <div className="flex items-center space-x-3">
+        {/* Left: Query Result Header */}
+        <div className="flex items-center space-x-3 min-w-0">
           <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center shrink-0 shadow-sm">
             <BarChart2 className="w-5 h-5 text-amber-400" />
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center space-x-2">
-              <h2 className="text-base font-extrabold text-white tracking-tight">Power BI Live Integration Hub</h2>
-              <span className="px-2 py-0.5 bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 text-[10px] font-black rounded-md uppercase tracking-wider flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                Live DB Connected
+              <h2 className="text-base font-extrabold text-white tracking-tight truncate max-w-md">
+                {dashboardData?.question || activeQuery?.title || 'Power BI SQL Query Dashboard'}
+              </h2>
+              <span className="px-2 py-0.5 bg-amber-500/15 border border-amber-500/40 text-amber-300 text-[10px] font-black rounded-md uppercase tracking-wider">
+                SQL Result Dashboard
               </span>
             </div>
-            <p className="text-xs text-zinc-400 font-medium truncate">
-              Database: <span className="text-amber-300 font-mono font-bold">{schemaData?.dbConfig?.database || 'datamind_app2'}</span> ({schemaData?.totalTables || 0} tables, {schemaData?.totalRows?.toLocaleString() || 0} total rows)
+            <p className="text-xs text-zinc-400 truncate">
+              {dashboardData ? `${dashboardData.totalRows} rows computed in ${dashboardData.executionTimeMs}ms` : 'Automated Power BI Dashboard from generated SQL'}
             </p>
           </div>
         </div>
 
-        {/* Right: 1-Click Automation Actions */}
+        {/* Right: 1-Click Power BI Export & Automation Actions */}
         <div className="flex items-center space-x-2 shrink-0">
           
-          {/* ⚡ 1-Click Open in Power BI Desktop (.pbids) */}
+          {/* ⚡ 1-Click Open in Power BI Desktop */}
           <button
             onClick={handleDownloadPbids}
             className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black text-xs rounded-xl flex items-center space-x-1.5 shadow-md active:scale-[0.98] transition cursor-pointer"
-            title="1-Click download Power BI Data Source Connection (.pbids) for Power BI Desktop"
+            title="Download Power BI Desktop Data Source (.pbids)"
           >
             <Download className="w-4 h-4" />
             <span>⚡ 1-Click Open in Power BI</span>
           </button>
 
-          {/* Power Query M-Code */}
+          {/* Power Query M-Code for this Query */}
           <button
             onClick={() => setShowMCodeModal(true)}
-            className="px-3 py-2 bg-[#22242c] hover:bg-[#2b2e38] text-zinc-200 border border-[#343844] font-bold text-xs rounded-xl flex items-center space-x-1.5 transition cursor-pointer shadow-sm"
-            title="View ready-to-paste Power Query M Script"
+            className="px-3 py-2 bg-[#22242c] hover:bg-[#2b2e38] text-zinc-200 border border-[#343844] font-bold text-xs rounded-xl flex items-center space-x-1.5 transition cursor-pointer"
+            title="View Power Query M-Script for this SQL Query"
           >
             <Code className="w-3.5 h-3.5 text-amber-400" />
             <span>Power Query M</span>
           </button>
 
-          {/* Copy Live Feed URL */}
-          <button
-            onClick={handleCopyFeedUrl}
-            className="px-3 py-2 bg-[#22242c] hover:bg-[#2b2e38] text-zinc-200 border border-[#343844] font-bold text-xs rounded-xl flex items-center space-x-1.5 transition cursor-pointer shadow-sm"
-            title="Copy Live REST Data Feed URL for Power BI Web Connector"
-          >
-            {copiedFeedUrl ? <CheckCheck className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-            <span>{copiedFeedUrl ? 'Copied' : 'Live Data Feed'}</span>
-          </button>
-
-          {/* DAX Copilot Toggle */}
+          {/* DAX Copilot */}
           <button
             onClick={() => setIsCopilotOpen(!isCopilotOpen)}
-            className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer shadow-sm ${
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer ${
               isCopilotOpen
                 ? 'bg-amber-400 text-black font-extrabold'
                 : 'bg-[#22242c] hover:bg-[#2b2e38] text-amber-300 border border-amber-500/30'
             }`}
-            title="Open Power BI DAX AI Copilot"
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
             <span>DAX Copilot</span>
           </button>
 
-          {/* Connect Published Report */}
+          {/* Refresh Query */}
           <button
-            onClick={() => setIsAddingReport(true)}
-            className="px-3 py-2 bg-[#5850ec] hover:bg-[#4f46e5] text-white text-xs font-bold rounded-xl transition flex items-center space-x-1 cursor-pointer shadow-sm"
-            title="Embed an existing published Power BI Report"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Embed Report</span>
-          </button>
-
-          {/* Refresh Schema */}
-          <button
-            onClick={fetchLiveSchema}
+            onClick={() => runQueryDashboard(customSql || activeQuery?.sql, customQuestion || activeQuery?.question)}
             className="p-2 bg-[#22242c] hover:bg-[#2b2e38] text-zinc-300 hover:text-white border border-[#343844] rounded-xl transition cursor-pointer"
-            title="Refresh database schema"
+            title="Re-execute SQL query"
           >
-            <RefreshCw className={`w-4 h-4 ${loadingSchema ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-4 h-4 ${loadingDashboard ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
 
-      {/* View Mode & Tables Horizontal Carousel */}
-      <div className="bg-[#15171d] border-b border-[#252832] px-5 py-2 flex items-center justify-between gap-3 overflow-x-auto no-scrollbar shrink-0">
+      {/* Generated SQL Queries Horizontal Carousel */}
+      <div className="bg-[#15171d] border-b border-[#252832] px-5 py-2.5 flex items-center space-x-2 overflow-x-auto no-scrollbar shrink-0">
+        <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider shrink-0 mr-1 flex items-center gap-1">
+          <Layers className="w-3 h-3 text-zinc-400" /> Generated SQL Queries:
+        </span>
         
-        {/* Left: Active Mode Selector */}
-        <div className="flex items-center space-x-2 shrink-0">
-          <button
-            onClick={() => setViewMode('live_database')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center space-x-1.5 transition cursor-pointer ${
-              viewMode === 'live_database'
-                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-sm'
-                : 'bg-[#1e2028] text-zinc-400 hover:text-white border border-[#2c303c]'
-            }`}
-          >
-            <Database className="w-3.5 h-3.5 text-amber-400" />
-            <span>Live Database BI View</span>
-          </button>
-
-          {customReports.map((report) => (
-            <div
-              key={report.id || report._id}
-              onClick={() => {
-                setActiveCustomReport(report);
-                setViewMode('embedded_report');
-              }}
-              className={`group flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition shrink-0 ${
-                viewMode === 'embedded_report' && String(activeCustomReport?.id || activeCustomReport?._id) === String(report.id || report._id)
-                  ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/50 shadow-sm'
-                  : 'bg-[#1e2028] text-zinc-400 hover:text-white border border-[#2c303c]'
+        {queriesList.map((q) => {
+          const isSelected = activeQuery && String(activeQuery.id || activeQuery._id) === String(q.id || q._id);
+          const displayTitle = q.question || q.name || 'SQL Query';
+          return (
+            <button
+              key={q.id || q._id}
+              onClick={() => handleSelectSavedQuery(q)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition shrink-0 max-w-xs truncate ${
+                isSelected
+                  ? 'bg-amber-500 text-black font-extrabold shadow-sm'
+                  : 'bg-[#1e2028] text-zinc-300 hover:text-white hover:bg-[#262a36] border border-[#2c303c]'
               }`}
+              title={displayTitle}
             >
-              <Eye className="w-3 h-3 text-indigo-400" />
-              <span className="truncate max-w-[150px]">{report.name}</span>
-              <button
-                onClick={(e) => handleDeleteCustomReport(report.id || report._id, e)}
-                className="opacity-0 group-hover:opacity-100 hover:text-rose-400 transition ml-1"
-                title="Remove report"
-              >
-                <Trash2 className="w-3 h-3" />
-              </button>
-            </div>
-          ))}
-        </div>
+              {displayTitle}
+            </button>
+          );
+        })}
 
-        {/* Right: Table Switcher */}
-        {viewMode === 'live_database' && schemaData?.tables && (
-          <div className="flex items-center space-x-2 shrink-0 overflow-x-auto">
-            <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider flex items-center gap-1">
-              <Table className="w-3 h-3 text-zinc-400" /> Tables:
-            </span>
-            {schemaData.tables.map((t) => (
-              <button
-                key={t.tableName}
-                onClick={() => handleSelectTable(t.tableName)}
-                className={`px-2.5 py-1 rounded-md text-xs font-mono font-medium transition cursor-pointer shrink-0 ${
-                  selectedTable === t.tableName
-                    ? 'bg-amber-500 text-black font-extrabold shadow-sm'
-                    : 'bg-[#1c1f26] text-zinc-300 hover:text-white hover:bg-[#252a34] border border-[#2c303c]'
-                }`}
-              >
-                {t.tableName} ({t.rowCount})
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Toggle Custom SQL Input */}
+        <button
+          onClick={() => setIsEditingSql(!isEditingSql)}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition shrink-0 flex items-center gap-1 border ${
+            isEditingSql
+              ? 'bg-indigo-600 text-white border-indigo-500'
+              : 'bg-[#1a1c24] text-indigo-400 border-indigo-500/40 hover:bg-indigo-500/10'
+          }`}
+        >
+          <Terminal className="w-3 h-3" />
+          <span>{isEditingSql ? 'Hide SQL Bar' : 'Custom SQL'}</span>
+        </button>
       </div>
 
-      {/* Notifications / Alerts */}
-      {successMsg && (
-        <div className="m-4 p-3.5 bg-emerald-950/70 border border-emerald-700/80 rounded-xl text-emerald-200 text-xs flex items-center justify-between shadow-lg animate-fadeIn">
-          <div className="flex items-center space-x-2">
-            <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span className="font-semibold">{successMsg}</span>
+      {/* Custom SQL Query Editor Drawer */}
+      {isEditingSql && (
+        <form onSubmit={handleRunCustomQuery} className="bg-[#181a22] border-b border-[#2e323c] p-4 flex flex-col md:flex-row gap-3 animate-fadeIn shrink-0">
+          <div className="flex-1 space-y-2">
+            <input
+              type="text"
+              placeholder="Query title / question (e.g. Sales by region)"
+              value={customQuestion}
+              onChange={(e) => setCustomQuestion(e.target.value)}
+              className="w-full bg-[#101216] border border-[#343844] rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-400"
+            />
+            <textarea
+              rows={2}
+              placeholder="Enter custom SQL query (e.g. SELECT department, AVG(salary) FROM tbl_sheet1_604870 GROUP BY department)"
+              value={customSql}
+              onChange={(e) => setCustomSql(e.target.value)}
+              className="w-full bg-[#101216] border border-[#343844] rounded-lg p-2 text-xs font-mono text-emerald-400 placeholder-zinc-500 focus:outline-none focus:border-amber-400 resize-none"
+            />
           </div>
-          <button onClick={() => setSuccessMsg(null)} className="text-emerald-400 hover:text-white">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+          <div className="flex md:flex-col justify-end gap-2 shrink-0">
+            <button
+              type="submit"
+              disabled={loadingDashboard || !customSql.trim()}
+              className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs rounded-xl flex items-center justify-center space-x-1.5 transition cursor-pointer shadow-sm disabled:opacity-50"
+            >
+              <Play className="w-3.5 h-3.5 fill-black" />
+              <span>Generate Dashboard</span>
+            </button>
+          </div>
+        </form>
       )}
 
+      {/* Alerts */}
       {error && (
-        <div className="m-4 p-3.5 bg-rose-950/70 border border-rose-700/80 rounded-xl text-rose-200 text-xs flex items-center justify-between shadow-lg animate-fadeIn">
+        <div className="m-4 p-3.5 bg-rose-950/70 border border-rose-700/80 rounded-xl text-rose-200 text-xs flex items-center justify-between shadow-lg">
           <div className="flex items-center space-x-2">
             <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
             <span>{error}</span>
@@ -441,122 +381,167 @@ export default function PowerBIViewer({ onNavigate }) {
         </div>
       )}
 
-      {/* Main Content Area */}
+      {/* Main Power BI Visual Canvas */}
       <div className="flex-1 flex min-h-0 relative overflow-hidden bg-[#0d0e12]">
         
-        {/* MODE 1: LIVE DATABASE BI WORKSPACE */}
-        {viewMode === 'live_database' && (
+        {loadingDashboard ? (
+          <div className="flex-1 flex flex-col items-center justify-center space-y-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center animate-spin">
+              <RefreshCw className="w-5 h-5 text-amber-400" />
+            </div>
+            <p className="text-xs font-bold text-zinc-300">Generating Power BI Dashboard from SQL results...</p>
+          </div>
+        ) : !dashboardData ? (
+          <div className="flex-1 flex items-center justify-center text-zinc-500 text-xs">
+            Select a SQL query above to generate its Power BI dashboard.
+          </div>
+        ) : (
           <div className="flex-1 flex flex-col h-full overflow-y-auto p-5 md:p-6 space-y-6">
             
-            {/* KPI Summary Cards from Real Database */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              
-              {/* Card 1: Active Table */}
-              <div className="bg-[#181a20] border border-[#2a2d36] rounded-2xl p-4 shadow-md space-y-1">
-                <div className="flex items-center justify-between text-zinc-400 text-xs font-semibold">
-                  <span>Selected Table</span>
-                  <Table className="w-4 h-4 text-amber-400" />
-                </div>
-                <div className="text-lg font-black text-white truncate font-mono" title={selectedTable}>
-                  {selectedTable || 'No table selected'}
-                </div>
-                <p className="text-[11px] text-zinc-500">Live PostgreSQL Table</p>
-              </div>
-
-              {/* Card 2: Row Count */}
-              <div className="bg-[#181a20] border border-[#2a2d36] rounded-2xl p-4 shadow-md space-y-1">
-                <div className="flex items-center justify-between text-zinc-400 text-xs font-semibold">
-                  <span>Total Records</span>
-                  <Activity className="w-4 h-4 text-emerald-400" />
-                </div>
-                <div className="text-xl font-black text-emerald-400 font-mono">
-                  {tableAnalytics ? tableAnalytics.totalRows.toLocaleString() : '0'}
-                </div>
-                <p className="text-[11px] text-zinc-500">Direct query row count</p>
-              </div>
-
-              {/* Card 3: Columns Count */}
-              <div className="bg-[#181a20] border border-[#2a2d36] rounded-2xl p-4 shadow-md space-y-1">
-                <div className="flex items-center justify-between text-zinc-400 text-xs font-semibold">
-                  <span>Column Attributes</span>
-                  <Layers className="w-4 h-4 text-indigo-400" />
-                </div>
-                <div className="text-xl font-black text-indigo-300 font-mono">
-                  {tableAnalytics ? tableAnalytics.columns.length : 0}
-                </div>
-                <p className="text-[11px] text-zinc-500">Schema fields available</p>
-              </div>
-
-              {/* Card 4: 1-Click Power BI Desktop */}
-              <div
-                onClick={handleDownloadPbids}
-                className="bg-gradient-to-br from-amber-500/10 to-amber-600/20 border border-amber-500/40 hover:border-amber-400 rounded-2xl p-4 shadow-md space-y-1 cursor-pointer transition active:scale-[0.98]"
-              >
-                <div className="flex items-center justify-between text-amber-300 text-xs font-bold">
-                  <span>Power BI Desktop</span>
-                  <Download className="w-4 h-4 text-amber-400" />
-                </div>
-                <div className="text-sm font-black text-amber-200">
-                  ⚡ Open in Power BI
-                </div>
-                <p className="text-[11px] text-amber-300/70">Click to launch DirectQuery</p>
-              </div>
-            </div>
-
-            {/* Live Visual Analytics & Categorical Distributions from Database */}
-            {tableAnalytics?.categoryDistribution && tableAnalytics.categoryDistribution.length > 0 && (
-              <div className="bg-[#181a20] border border-[#2a2d36] rounded-2xl p-5 shadow-md space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-sm font-extrabold text-white">Live Data Distribution</h3>
-                    <p className="text-xs text-zinc-400">Aggregated directly from database rows</p>
+            {/* KPI Cards (Power BI Metric Tiles) */}
+            {dashboardData.kpis && dashboardData.kpis.length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {dashboardData.kpis.map((kpi, idx) => (
+                  <div key={idx} className="bg-[#181a20] border border-[#2a2d36] rounded-2xl p-4 shadow-md space-y-1">
+                    <div className="text-zinc-400 text-xs font-semibold truncate" title={kpi.label}>
+                      {kpi.label}
+                    </div>
+                    <div className="text-xl md:text-2xl font-black text-amber-400 font-mono">
+                      {kpi.value}
+                    </div>
+                    <p className="text-[10px] text-zinc-500 truncate" title={kpi.subtitle}>
+                      {kpi.subtitle}
+                    </p>
                   </div>
-                  <span className="px-2 py-0.5 bg-zinc-800 text-zinc-300 text-[10px] font-mono rounded">
-                    Top {tableAnalytics.categoryDistribution.length} Categories
-                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Visual Analytics Chart Container */}
+            {dashboardData.rows && dashboardData.rows.length > 0 && (
+              <div className="bg-[#181a20] border border-[#2a2d36] rounded-2xl p-5 shadow-md space-y-4">
+                
+                {/* Visual Header & Chart Type Switcher */}
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#262832] pb-3">
+                  <div>
+                    <h3 className="text-sm font-extrabold text-white">Power BI Interactive Visual</h3>
+                    <p className="text-xs text-zinc-400">
+                      Metric distribution for <code className="text-amber-300 font-mono">{dashboardData.chartConfig?.xAxisKey || 'Records'}</code>
+                    </p>
+                  </div>
+
+                  {/* Chart Type Tabs */}
+                  <div className="flex items-center bg-[#101216] border border-[#2a2d36] rounded-xl p-1 space-x-1">
+                    <button
+                      onClick={() => setActiveChartType('bar')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition ${
+                        activeChartType === 'bar' ? 'bg-amber-500 text-black font-extrabold' : 'text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      <BarChart3 className="w-3.5 h-3.5" />
+                      <span>Bar</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveChartType('line')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition ${
+                        activeChartType === 'line' ? 'bg-amber-500 text-black font-extrabold' : 'text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      <TrendingUp className="w-3.5 h-3.5" />
+                      <span>Line</span>
+                    </button>
+                    <button
+                      onClick={() => setActiveChartType('donut')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition ${
+                        activeChartType === 'donut' ? 'bg-amber-500 text-black font-extrabold' : 'text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      <PieChart className="w-3.5 h-3.5" />
+                      <span>Donut</span>
+                    </button>
+                  </div>
                 </div>
 
-                {/* Dynamic Bar Charts */}
-                <div className="space-y-2.5 pt-2">
-                  {(() => {
-                    const maxCount = Math.max(...tableAnalytics.categoryDistribution.map(d => Number(d.count) || 1));
-                    return tableAnalytics.categoryDistribution.map((item, idx) => {
-                      const countNum = Number(item.count) || 0;
-                      const pct = Math.round((countNum / maxCount) * 100);
-                      return (
-                        <div key={idx} className="space-y-1">
-                          <div className="flex items-center justify-between text-xs font-medium">
-                            <span className="text-zinc-200 truncate max-w-xs">{String(item.label || 'None')}</span>
-                            <span className="text-amber-400 font-mono font-bold">{countNum.toLocaleString()} rows</span>
-                          </div>
-                          <div className="w-full h-2.5 bg-[#121318] rounded-full overflow-hidden">
-                            <div
-                              className="h-full bg-gradient-to-r from-amber-500 to-amber-400 rounded-full transition-all duration-500"
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    });
-                  })()}
+                {/* Render Selected Chart */}
+                <div className="w-full h-72 md:h-80 pt-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    {activeChartType === 'line' ? (
+                      <LineChart data={dashboardData.rows} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#262a34" />
+                        <XAxis dataKey={dashboardData.chartConfig.xAxisKey} stroke="#71717a" fontSize={11} tickLine={false} />
+                        <YAxis stroke="#71717a" fontSize={11} tickLine={false} />
+                        <Tooltip contentStyle={{ backgroundColor: '#181a20', borderColor: '#343844', borderRadius: '12px', fontSize: '12px' }} />
+                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                        {dashboardData.chartConfig.yAxisKeys.map((k, i) => (
+                          <Line key={k} type="monotone" dataKey={k} stroke={PALETTE[i % PALETTE.length]} strokeWidth={2.5} dot={{ r: 3 }} />
+                        ))}
+                      </LineChart>
+                    ) : activeChartType === 'donut' ? (
+                      <RechartsPie data={dashboardData.rows}>
+                        <Pie
+                          data={dashboardData.rows}
+                          dataKey={dashboardData.chartConfig.yAxisKeys[0] || dashboardData.columns[0]?.name}
+                          nameKey={dashboardData.chartConfig.xAxisKey}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={95}
+                          paddingAngle={4}
+                        >
+                          {dashboardData.rows.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={PALETTE[index % PALETTE.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip contentStyle={{ backgroundColor: '#181a20', borderColor: '#343844', borderRadius: '12px', fontSize: '12px' }} />
+                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                      </RechartsPie>
+                    ) : (
+                      <BarChart data={dashboardData.rows} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#262a34" />
+                        <XAxis dataKey={dashboardData.chartConfig.xAxisKey} stroke="#71717a" fontSize={11} tickLine={false} />
+                        <YAxis stroke="#71717a" fontSize={11} tickLine={false} />
+                        <Tooltip contentStyle={{ backgroundColor: '#181a20', borderColor: '#343844', borderRadius: '12px', fontSize: '12px' }} />
+                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                        {dashboardData.chartConfig.yAxisKeys.length > 0 ? (
+                          dashboardData.chartConfig.yAxisKeys.map((k, i) => (
+                            <Bar key={k} dataKey={k} fill={PALETTE[i % PALETTE.length]} radius={[6, 6, 0, 0]} />
+                          ))
+                        ) : (
+                          <Bar dataKey={dashboardData.columns[0]?.name} fill="#f59e0b" radius={[6, 6, 0, 0]} />
+                        )}
+                      </BarChart>
+                    )}
+                  </ResponsiveContainer>
                 </div>
               </div>
             )}
 
-            {/* Real Data Table Grid */}
+            {/* SQL Results Matrix Grid */}
             <div className="bg-[#181a20] border border-[#2a2d36] rounded-2xl p-5 shadow-md space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
                     <Database className="w-4 h-4 text-amber-400" />
-                    <span>Live Database Records</span>
+                    <span>SQL Query Result Matrix</span>
                   </h3>
                   <p className="text-xs text-zinc-400">
-                    Showing first {tableAnalytics?.rows?.length || 0} rows from table <code className="text-amber-300 font-mono">{selectedTable}</code>
+                    Showing {filteredRows.length} of {dashboardData.totalRows} records
                   </p>
                 </div>
 
                 <div className="flex items-center space-x-2">
+                  {/* Search Slicer */}
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-zinc-500" />
+                    <input
+                      type="text"
+                      placeholder="Filter rows..."
+                      value={filterText}
+                      onChange={(e) => setFilterText(e.target.value)}
+                      className="bg-[#101216] border border-[#2e323c] rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+
                   <button
                     onClick={handleExportCsv}
                     className="px-3 py-1.5 bg-[#22242c] hover:bg-[#2b2e38] text-zinc-200 border border-[#343844] rounded-lg text-xs font-bold flex items-center space-x-1.5 transition cursor-pointer"
@@ -564,67 +549,44 @@ export default function PowerBIViewer({ onNavigate }) {
                     <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
                     <span>Export CSV</span>
                   </button>
-
-                  <button
-                    onClick={() => loadTableData(selectedTable)}
-                    className="p-1.5 bg-[#22242c] hover:bg-[#2b2e38] text-zinc-300 hover:text-white border border-[#343844] rounded-lg transition"
-                    title="Reload table rows"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${loadingAnalytics ? 'animate-spin' : ''}`} />
-                  </button>
                 </div>
               </div>
 
               {/* Data Table */}
-              <div className="overflow-x-auto border border-[#2e323c] rounded-xl max-h-96">
-                {loadingAnalytics ? (
-                  <div className="py-16 text-center text-zinc-400 text-xs font-semibold">
-                    Loading live database records...
-                  </div>
-                ) : !tableAnalytics || tableAnalytics.rows.length === 0 ? (
-                  <div className="py-16 text-center text-zinc-500 text-xs font-medium">
-                    No rows found in this table.
-                  </div>
-                ) : (
-                  <table className="w-full text-left text-xs border-collapse font-sans">
-                    <thead className="bg-[#14161c] text-zinc-300 font-bold border-b border-[#2e323c] sticky top-0 z-10">
-                      <tr>
-                        {tableAnalytics.columns.map((col, idx) => (
-                          <th key={idx} className="p-3 whitespace-nowrap font-mono text-zinc-300">
-                            {col.name}
-                            <span className="ml-1 text-[10px] text-zinc-500 font-normal">({col.type})</span>
-                          </th>
+              <div className="overflow-x-auto border border-[#2e323c] rounded-xl max-h-80">
+                <table className="w-full text-left text-xs border-collapse font-sans">
+                  <thead className="bg-[#14161c] text-zinc-300 font-bold border-b border-[#2e323c] sticky top-0 z-10">
+                    <tr>
+                      {dashboardData.columns.map((col, idx) => (
+                        <th key={idx} className="p-3 whitespace-nowrap font-mono text-zinc-300">
+                          {col.name}
+                          <span className="ml-1 text-[10px] text-zinc-500 font-normal">({col.type})</span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#22252e] bg-[#181a20]">
+                    {filteredRows.map((row, rIdx) => (
+                      <tr key={rIdx} className="hover:bg-[#20232b] transition">
+                        {dashboardData.columns.map((col, cIdx) => (
+                          <td key={cIdx} className="p-3 text-zinc-300 font-mono whitespace-nowrap text-[11px]">
+                            {row[col.name] !== null && row[col.name] !== undefined ? String(row[col.name]) : <span className="text-zinc-600">NULL</span>}
+                          </td>
                         ))}
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#22252e] bg-[#181a20]">
-                      {tableAnalytics.rows.map((row, rIdx) => (
-                        <tr key={rIdx} className="hover:bg-[#20232b] transition">
-                          {tableAnalytics.columns.map((col, cIdx) => (
-                            <td key={cIdx} className="p-3 text-zinc-300 font-mono whitespace-nowrap text-[11px]">
-                              {row[col.name] !== null && row[col.name] !== undefined ? String(row[col.name]) : <span className="text-zinc-600">NULL</span>}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Underlying SQL Query Box */}
+              <div className="p-3 bg-[#0d0e12] border border-[#262932] rounded-xl space-y-1">
+                <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider font-mono">Executed SQL:</span>
+                <pre className="text-[11px] font-mono text-emerald-400 overflow-x-auto whitespace-pre-wrap">
+                  {dashboardData.sql}
+                </pre>
               </div>
             </div>
-          </div>
-        )}
-
-        {/* MODE 2: EMBEDDED PUBLISHED REPORT */}
-        {viewMode === 'embedded_report' && activeCustomReport && (
-          <div className="flex-1 h-full w-full relative">
-            <iframe
-              title={activeCustomReport.name}
-              src={activeCustomReport.embedUrl}
-              className="w-full h-full border-0"
-              allowFullScreen={true}
-              sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-downloads"
-            />
           </div>
         )}
 
@@ -643,16 +605,16 @@ export default function PowerBIViewer({ onNavigate }) {
 
             <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
               <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-200/90 leading-relaxed">
-                <span className="font-bold text-amber-300">Live Model Target:</span> Generating DAX measures tailored for table <code className="text-white font-mono font-bold">'{selectedTable}'</code>.
+                <span className="font-bold text-amber-300">Query Target:</span> Generating DAX expressions tailored to the columns in this SQL query result.
               </div>
 
               {/* Sample Prompts */}
               <div className="space-y-1.5">
-                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Common Calculations:</span>
+                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Common DAX Formulas:</span>
                 <div className="flex flex-col gap-1.5">
                   {[
                     'Calculate YoY Growth %',
-                    'Dynamic average calculation',
+                    'Weighted Average calculation',
                     'Rank rows in descending order'
                   ].map((sug, i) => (
                     <button
@@ -694,7 +656,7 @@ export default function PowerBIViewer({ onNavigate }) {
                     <button
                       onClick={() => {
                         navigator.clipboard.writeText(daxResult.formula);
-                        setSuccessMsg('DAX Formula copied to clipboard!');
+                        setSuccessMsg('DAX Formula copied!');
                         setTimeout(() => setSuccessMsg(null), 3000);
                       }}
                       className="px-2 py-1 bg-[#20232b] hover:bg-[#282c36] border border-zinc-700 text-zinc-300 text-[10px] font-bold rounded flex items-center space-x-1"
@@ -714,14 +676,14 @@ export default function PowerBIViewer({ onNavigate }) {
         )}
       </div>
 
-      {/* Power Query M-Code Modal */}
+      {/* Power Query M-Code Modal for this SQL Query */}
       {showMCodeModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
           <div className="bg-[#181a20] border border-[#2e323c] rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl space-y-4 p-6 text-xs">
             <div className="flex items-center justify-between border-b border-[#2e323c] pb-3">
               <div className="flex items-center space-x-2">
                 <Code className="w-4 h-4 text-amber-400" />
-                <h3 className="text-base font-extrabold text-white">Power Query M Script</h3>
+                <h3 className="text-base font-extrabold text-white">Power Query M Script (Generated SQL)</h3>
               </div>
               <button onClick={() => setShowMCodeModal(false)} className="p-1.5 text-zinc-400 hover:text-white rounded-lg">
                 <X className="w-5 h-5" />
@@ -729,78 +691,26 @@ export default function PowerBIViewer({ onNavigate }) {
             </div>
 
             <p className="text-zinc-300">
-              Paste this in <strong className="text-white">Power BI Desktop &rarr; Transform Data &rarr; Advanced Editor</strong>:
+              Paste this in <strong className="text-white">Power BI Desktop &rarr; Transform Data &rarr; Advanced Editor</strong> to load this exact query result:
             </p>
 
-            <pre className="p-4 bg-[#0d0e12] border border-[#2a2d36] rounded-xl text-emerald-400 font-mono text-[11px] overflow-x-auto max-h-60">
-              {mCodeText}
+            <pre className="p-4 bg-[#0d0e12] border border-[#2a2d36] rounded-xl text-emerald-400 font-mono text-[11px] overflow-x-auto max-h-60 whitespace-pre-wrap">
+              {dashboardData?.powerQueryCode || 'Loading M-Code...'}
             </pre>
 
             <div className="flex items-center justify-end space-x-3 pt-2">
               <button
-                onClick={handleCopyMCode}
+                onClick={() => {
+                  navigator.clipboard.writeText(dashboardData?.powerQueryCode || '');
+                  setCopiedMCode(true);
+                  setTimeout(() => setCopiedMCode(false), 2500);
+                }}
                 className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl flex items-center space-x-1.5 transition cursor-pointer"
               >
                 {copiedMCode ? <CheckCheck className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                <span>{copiedMCode ? 'Copied M-Code!' : 'Copy Script'}</span>
+                <span>{copiedMCode ? 'Copied M-Script!' : 'Copy Script'}</span>
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Connect Custom Published Report Modal */}
-      {isAddingReport && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-[#181a20] border border-[#2e323c] rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl p-6 space-y-4 text-xs">
-            <div className="flex items-center justify-between border-b border-[#2e323c] pb-3">
-              <h3 className="text-base font-extrabold text-white">Embed Power BI Published Report</h3>
-              <button onClick={() => setIsAddingReport(false)} className="p-1.5 text-zinc-400 hover:text-white rounded-lg">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleAddCustomReport} className="space-y-4">
-              <div>
-                <label className="block text-zinc-200 font-bold mb-1">Report Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Sales Executive Dashboard"
-                  value={formReport.name}
-                  onChange={(e) => setFormReport({ ...formReport, name: e.target.value })}
-                  className="w-full bg-[#101216] border border-[#343844] focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-white placeholder-zinc-500 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-zinc-200 font-bold mb-1">Power BI Embed URL or iframe code *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="https://app.powerbi.com/view?r=... or https://app.powerbi.com/reportEmbed?..."
-                  value={formReport.embedUrl}
-                  onChange={(e) => setFormReport({ ...formReport, embedUrl: e.target.value })}
-                  className="w-full bg-[#101216] border border-[#343844] focus:border-amber-400 rounded-xl px-3.5 py-2.5 text-white placeholder-zinc-500 focus:outline-none font-mono text-[11px]"
-                />
-              </div>
-
-              <div className="flex items-center justify-end space-x-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsAddingReport(false)}
-                  className="px-4 py-2 border border-[#343844] hover:bg-zinc-800 text-zinc-300 font-bold rounded-xl"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl transition cursor-pointer"
-                >
-                  Save Report
-                </button>
-              </div>
-            </form>
           </div>
         </div>
       )}

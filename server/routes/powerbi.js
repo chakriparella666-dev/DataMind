@@ -5,9 +5,9 @@ const PowerBIReport = require('../models/PowerBIReport');
 const {
   parsePostgresConfig,
   generatePbidsFile,
-  generatePowerQueryMCode,
-  getLiveDatabaseSchema,
-  getLiveTableAnalytics
+  generateQueryPowerQueryMCode,
+  executeSqlQueryForPowerBI,
+  getSavedSqlQueries
 } = require('../services/powerbiService');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'datamind_jwt_secret_key_2026';
@@ -29,27 +29,31 @@ const getUserIdFromReq = (req) => {
   return req.headers['x-user-id'] || req.headers['x-user-email'] || 'anonymous_guest';
 };
 
-// GET /api/powerbi/schema - Fetch live real database schema & tables
-router.get('/schema', async (req, res) => {
+// GET /api/powerbi/queries - Get all generated SQL queries/dashboards
+router.get('/queries', async (req, res) => {
   try {
-    const data = await getLiveDatabaseSchema();
-    res.json({ success: true, ...data });
+    const userId = getUserIdFromReq(req);
+    const queries = await getSavedSqlQueries(userId);
+    res.json({ success: true, queries });
   } catch (error) {
-    console.error('[PowerBI Route Error] Schema introspection:', error);
-    res.status(500).json({ success: false, error: error.message || 'Failed to fetch database schema' });
+    console.error('[PowerBI Route Error] Fetch queries:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to fetch saved SQL queries' });
   }
 });
 
-// GET /api/powerbi/table-analytics/:tableName - Fetch live table records and BI metrics from PostgreSQL
-router.get('/table-analytics/:tableName', async (req, res) => {
+// POST /api/powerbi/execute-query - Execute a SQL query and build live Power BI Dashboard analytics
+router.post('/execute-query', async (req, res) => {
   try {
-    const { tableName } = req.params;
-    const { limit } = req.query;
-    const analytics = await getLiveTableAnalytics(tableName, limit);
-    res.json({ success: true, analytics });
+    const { sql, question } = req.body;
+    if (!sql || !sql.trim()) {
+      return res.status(400).json({ success: false, error: 'SQL query string is required' });
+    }
+
+    const dashboardData = await executeSqlQueryForPowerBI(sql.trim(), question || 'SQL Query');
+    res.json({ success: true, dashboard: dashboardData });
   } catch (error) {
-    console.error('[PowerBI Route Error] Table analytics:', error);
-    res.status(500).json({ success: false, error: error.message || 'Failed to fetch table analytics' });
+    console.error('[PowerBI Route Error] Execute query:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to execute query' });
   }
 });
 
@@ -64,32 +68,6 @@ router.get('/export-pbids', (req, res) => {
   } catch (error) {
     console.error('[PowerBI Route Error] PBIDS export:', error);
     res.status(500).json({ success: false, error: error.message || 'Failed to generate .pbids file' });
-  }
-});
-
-// GET /api/powerbi/powerquery-code/:tableName - 1-Click Power Query M-Code
-router.get('/powerquery-code/:tableName', (req, res) => {
-  try {
-    const { tableName } = req.params;
-    const code = generatePowerQueryMCode(tableName);
-    res.json({ success: true, code });
-  } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-// GET /api/powerbi/feed - Live REST Data Feed for Power BI Web Connector
-router.get('/feed', async (req, res) => {
-  try {
-    const { table, limit = 500 } = req.query;
-    if (!table) {
-      const schema = await getLiveDatabaseSchema();
-      return res.json({ success: true, database: schema.dbConfig.database, tables: schema.tables.map(t => t.tableName) });
-    }
-    const analytics = await getLiveTableAnalytics(table, limit);
-    res.json(analytics.rows);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
   }
 });
 
