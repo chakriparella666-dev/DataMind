@@ -32,8 +32,10 @@ export default function PowerBIViewer({ onNavigate }) {
   // Clipboard & Automation states
   const [copiedMCode, setCopiedMCode] = useState(false);
   const [copiedFeedUrl, setCopiedFeedUrl] = useState(false);
+  const [copiedField, setCopiedField] = useState('');
   const [mCodeText, setMCodeText] = useState('');
   const [showMCodeModal, setShowMCodeModal] = useState(false);
+  const [showPbidsModal, setShowPbidsModal] = useState(false);
   const [isAddingReport, setIsAddingReport] = useState(false);
 
   // DAX Copilot State
@@ -109,15 +111,21 @@ export default function PowerBIViewer({ onNavigate }) {
 
   // 1-Click PBIDS Download Handler
   const handleDownloadPbids = () => {
-    const url = `/api/powerbi/export-pbids?table=${encodeURIComponent(selectedTable || '')}`;
+    const url = `/api/powerbi/export-pbids`;
     const link = document.createElement('a');
     link.href = url;
     link.download = `DataMind_${schemaData?.dbConfig?.database || 'Database'}_Live.pbids`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    setSuccessMsg('⚡ Power BI Data Source (.pbids) downloaded! Double-click the file to open Power BI Desktop with live DirectQuery.');
-    setTimeout(() => setSuccessMsg(null), 6000);
+    setShowPbidsModal(true);
+  };
+
+  const handleCopyText = (text, fieldName) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedField(fieldName);
+    setTimeout(() => setCopiedField(''), 2500);
   };
 
   // 1-Click Copy Power Query M-Code
@@ -793,6 +801,110 @@ export default function PowerBIViewer({ onNavigate }) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* 1-Click Power BI Desktop Connection Helper Modal */}
+      {showPbidsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-[#181a20] border border-[#2e323c] rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl p-6 space-y-4 text-xs">
+            <div className="flex items-center justify-between border-b border-[#2e323c] pb-3">
+              <div className="flex items-center space-x-2">
+                <div className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
+                  ⚡
+                </div>
+                <h3 className="text-base font-extrabold text-white">Power BI Desktop Connection</h3>
+              </div>
+              <button onClick={() => setShowPbidsModal(false)} className="p-1.5 text-zinc-400 hover:text-white rounded-lg">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-emerald-950/60 border border-emerald-800/80 rounded-xl text-emerald-300 space-y-1">
+              <div className="font-bold flex items-center gap-1.5 text-emerald-200">
+                <Check className="w-4 h-4 text-emerald-400" />
+                <span>File Downloaded: DataMind_{schemaData?.dbConfig?.database || 'datamind_app2'}_Live.pbids</span>
+              </div>
+              <p className="text-[11px] text-emerald-300/80">
+                Double-click the downloaded <code className="bg-black/30 px-1 py-0.5 rounded font-mono">.pbids</code> file to launch Power BI Desktop.
+              </p>
+            </div>
+
+            <div className="space-y-2.5">
+              <p className="font-bold text-zinc-300">When prompted by Power BI Desktop for Database Credentials:</p>
+
+              <div className="space-y-2 bg-[#101216] border border-[#2a2d36] rounded-xl p-3.5">
+                {/* Server */}
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-400 font-medium">Server:</span>
+                  <div className="flex items-center space-x-2">
+                    <code className="text-amber-300 font-mono text-[11px]">{schemaData?.dbConfig?.host || 'dpg-da6a63e1egvs739u0880-a.oregon-postgres.render.com'}</code>
+                    <button
+                      onClick={() => handleCopyText(schemaData?.dbConfig?.host || 'dpg-da6a63e1egvs739u0880-a.oregon-postgres.render.com', 'server')}
+                      className="px-2 py-0.5 bg-[#22242c] hover:bg-[#2b2e38] text-zinc-300 text-[10px] font-bold rounded flex items-center gap-1"
+                    >
+                      {copiedField === 'server' ? <CheckCheck className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedField === 'server' ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Database */}
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-400 font-medium">Database:</span>
+                  <div className="flex items-center space-x-2">
+                    <code className="text-amber-300 font-mono text-[11px]">{schemaData?.dbConfig?.database || 'datamind_app2'}</code>
+                    <button
+                      onClick={() => handleCopyText(schemaData?.dbConfig?.database || 'datamind_app2', 'database')}
+                      className="px-2 py-0.5 bg-[#22242c] hover:bg-[#2b2e38] text-zinc-300 text-[10px] font-bold rounded flex items-center gap-1"
+                    >
+                      {copiedField === 'database' ? <CheckCheck className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedField === 'database' ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* User Name */}
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-400 font-medium">User Name:</span>
+                  <div className="flex items-center space-x-2">
+                    <code className="text-amber-300 font-mono text-[11px]">{schemaData?.dbConfig?.user || 'postgresql'}</code>
+                    <button
+                      onClick={() => handleCopyText(schemaData?.dbConfig?.user || 'postgresql', 'user')}
+                      className="px-2 py-0.5 bg-[#22242c] hover:bg-[#2b2e38] text-zinc-300 text-[10px] font-bold rounded flex items-center gap-1"
+                    >
+                      {copiedField === 'user' ? <CheckCheck className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedField === 'user' ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Password */}
+                <div className="flex items-center justify-between">
+                  <span className="text-zinc-400 font-medium">Password:</span>
+                  <div className="flex items-center space-x-2">
+                    <code className="text-amber-300 font-mono text-[11px]">{schemaData?.dbConfig?.password || 'wAgTT2iOebYIxkk8pT6dupwZiocVzm0Q'}</code>
+                    <button
+                      onClick={() => handleCopyText(schemaData?.dbConfig?.password || 'wAgTT2iOebYIxkk8pT6dupwZiocVzm0Q', 'password')}
+                      className="px-2 py-0.5 bg-[#22242c] hover:bg-[#2b2e38] text-zinc-300 text-[10px] font-bold rounded flex items-center gap-1"
+                    >
+                      {copiedField === 'password' ? <CheckCheck className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedField === 'password' ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end pt-2">
+              <button
+                onClick={() => setShowPbidsModal(false)}
+                className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-xl transition cursor-pointer"
+              >
+                Got It, Open Power BI
+              </button>
+            </div>
           </div>
         </div>
       )}

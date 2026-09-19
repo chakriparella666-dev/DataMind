@@ -35,9 +35,9 @@ function parsePostgresConfig() {
 
 /**
  * Generate standard Power BI Data Source (.pbids) connection file content
- * Enables 1-click opening in Power BI Desktop
+ * Enables 1-click opening in Power BI Desktop without syntax errors
  */
-function generatePbidsFile(selectedTable = null) {
+function generatePbidsFile() {
   const config = parsePostgresConfig();
 
   const pbidsObject = {
@@ -50,12 +50,9 @@ function generatePbidsFile(selectedTable = null) {
             server: config.host + (config.port && config.port !== 5432 ? `:${config.port}` : ''),
             database: config.database
           },
-          authentication: null,
-          query: selectedTable ? `SELECT * FROM "${selectedTable}";` : null
+          authentication: null
         },
-        options: {
-          CreateNavigationProperties: true
-        },
+        options: {},
         mode: 'DirectQuery'
       }
     ]

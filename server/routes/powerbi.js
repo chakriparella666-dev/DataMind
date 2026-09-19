@@ -56,8 +56,7 @@ router.get('/table-analytics/:tableName', async (req, res) => {
 // GET /api/powerbi/export-pbids - 1-Click download Power BI Data Source Connection File (.pbids)
 router.get('/export-pbids', (req, res) => {
   try {
-    const { table } = req.query;
-    const { filename, content } = generatePbidsFile(table || null);
+    const { filename, content } = generatePbidsFile();
 
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
