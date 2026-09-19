@@ -5,6 +5,7 @@ import PowerBIViewer from '../components/PowerBIViewer';
 
 export default function DashboardsPage({ onNavigate }) {
   const [activeTab, setActiveTab] = useState('powerbi'); // 'powerbi' or 'sql'
+  const [selectedPowerBIQuery, setSelectedPowerBIQuery] = useState(null);
   const [dashboards, setDashboards] = useState([]);
   const [dataSources, setDataSources] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -143,7 +144,7 @@ export default function DashboardsPage({ onNavigate }) {
         </div>
 
         {/* Embedded Power BI Component */}
-        <PowerBIViewer onNavigate={onNavigate} />
+        <PowerBIViewer initialQuery={selectedPowerBIQuery} onNavigate={onNavigate} />
       </div>
     );
   }
@@ -295,14 +296,25 @@ export default function DashboardsPage({ onNavigate }) {
                         </span>
                         <div className="flex items-center space-x-2">
                           <button
-                            onClick={() => onNavigate?.('workspace', dash)}
-                            className="px-3 py-1.5 bg-[#5850ec] hover:bg-[#4f46e5] text-white text-xs font-bold rounded-lg transition cursor-pointer"
+                            onClick={() => {
+                              setSelectedPowerBIQuery(dash);
+                              setActiveTab('powerbi');
+                            }}
+                            className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black text-xs font-black rounded-lg transition cursor-pointer flex items-center gap-1.5 shadow-sm active:scale-[0.98]"
+                            title="Visualize full interactive Power BI Dashboard for this query"
                           >
-                            Open
+                            <BarChart2 className="w-3.5 h-3.5 fill-black" />
+                            <span>Power BI</span>
+                          </button>
+                          <button
+                            onClick={() => onNavigate?.('workspace', dash)}
+                            className="px-3 py-1.5 bg-[#2a2c36] hover:bg-[#343744] text-zinc-200 hover:text-white text-xs font-bold rounded-lg transition cursor-pointer border border-[#383b48]"
+                          >
+                            SQL View
                           </button>
                           <button
                             onClick={() => handleDelete(dash.id || dash._id)}
-                            className="px-2.5 py-1.5 border border-rose-800/80 hover:bg-rose-950/40 text-rose-400 text-xs font-bold rounded-lg transition cursor-pointer"
+                            className="px-2 py-1.5 border border-rose-800/80 hover:bg-rose-950/40 text-rose-400 text-xs font-bold rounded-lg transition cursor-pointer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>

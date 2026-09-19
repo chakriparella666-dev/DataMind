@@ -4,7 +4,7 @@ import {
   Sparkles, Layers, Check, AlertCircle, Code, Filter,
   FileSpreadsheet, Play, Activity, Search,
   ChevronRight, Terminal, PieChart, TrendingUp, BarChart3, X,
-  Grid, SlidersHorizontal, ArrowUpDown
+  Grid, SlidersHorizontal, Settings2, RotateCcw
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, AreaChart, Area, PieChart as RechartsPie,
@@ -21,14 +21,14 @@ const PALETTE = [
   '#06b6d4', '#f97316', '#14b8a6', '#6366f1', '#84cc16'
 ];
 
-export default function PowerBIViewer({ onNavigate }) {
+export default function PowerBIViewer({ initialQuery, onNavigate }) {
   // Queries & Active Dashboard State
   const [queriesList, setQueriesList] = useState([]);
   const [activeQuery, setActiveQuery] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
   const [schemaData, setSchemaData] = useState(null);
 
-  // UI & Slicer States
+  // UI, Slicer & Customization States
   const [loadingList, setLoadingList] = useState(true);
   const [loadingDashboard, setLoadingDashboard] = useState(false);
   const [error, setError] = useState(null);
@@ -36,6 +36,12 @@ export default function PowerBIViewer({ onNavigate }) {
   const [activeChartType, setActiveChartType] = useState('bar'); // 'bar' | 'line' | 'area'
   const [selectedSlicers, setSelectedSlicers] = useState({}); // { [colName]: selectedVal }
   const [filterText, setFilterText] = useState('');
+
+  // Visual Customizer Field Wells (X-Axis, Y-Axis, Aggregation Method)
+  const [customXAxis, setCustomXAxis] = useState('');
+  const [customYAxis, setCustomYAxis] = useState([]); // array of selected metric names
+  const [aggFunction, setAggFunction] = useState('SUM'); // 'SUM' | 'AVG' | 'COUNT' | 'MAX' | 'MIN'
+  const [showFieldCustomizer, setShowFieldCustomizer] = useState(false);
 
   // Custom Query Bar State
   const [customSql, setCustomSql] = useState('');
@@ -68,8 +74,14 @@ export default function PowerBIViewer({ onNavigate }) {
         setSchemaData(schemaRes);
       }
 
-      if (queriesRes.success && Array.isArray(queriesRes.queries) && queriesRes.queries.length > 0) {
+      if (queriesRes.success && Array.isArray(queriesRes.queries)) {
         setQueriesList(queriesRes.queries);
+      }
+
+      if (initialQuery && initialQuery.sql) {
+        setActiveQuery(initialQuery);
+        runQueryDashboard(initialQuery.sql, initialQuery.question || initialQuery.name);
+      } else if (queriesRes.success && Array.isArray(queriesRes.queries) && queriesRes.queries.length > 0) {
         const initial = queriesRes.queries[0];
         setActiveQuery(initial);
         runQueryDashboard(initial.sql, initial.question || initial.name);
@@ -87,7 +99,7 @@ export default function PowerBIViewer({ onNavigate }) {
 
   useEffect(() => {
     fetchQueriesAndInit();
-  }, []);
+  }, [initialQuery]);
 
   // Run SQL Query and build Power BI Dashboard
   const runQueryDashboard = async (sqlString, questionString) => {
@@ -95,6 +107,8 @@ export default function PowerBIViewer({ onNavigate }) {
     setLoadingDashboard(true);
     setError(null);
     setSelectedSlicers({});
+    setCustomXAxis('');
+    setCustomYAxis([]);
     try {
       const res = await executePowerBIQuery({
         sql: sqlString.trim(),
@@ -105,6 +119,17 @@ export default function PowerBIViewer({ onNavigate }) {
         setDashboardData(res.dashboard);
         setCustomSql(sqlString.trim());
         setCustomQuestion(questionString || '');
+
+        // Auto-select best initial X-axis and Y-axis
+        const cols = res.dashboard.columns || [];
+        const textCols = cols.filter(c => c.type !== 'numeric').map(c => c.name);
+        const numCols = cols.filter(c => c.type === 'numeric').map(c => c.name);
+
+        const defaultX = textCols[0] || cols[0]?.name || '';
+        const defaultY = numCols.length > 0 ? numCols.slice(0, 2) : ['Record Count'];
+
+        setCustomXAxis(defaultX);
+        setCustomYAxis(defaultY);
       } else {
         setError(res.error || 'Failed to generate Power BI dashboard');
       }
@@ -160,7 +185,7 @@ export default function PowerBIViewer({ onNavigate }) {
     setTimeout(() => setCopiedField(''), 2500);
   };
 
-  // Dynamic Sliced Rows (Client-side interactive slicing)
+  // Dynamic Sliced Rows (Client-side interactive cross-filtering)
   const slicedRows = useMemo(() => {
     if (!dashboardData?.rows) return [];
     return dashboardData.rows.filter(r => {
@@ -179,86 +204,93 @@ export default function PowerBIViewer({ onNavigate }) {
     });
   }, [dashboardData?.rows, selectedSlicers, filterText]);
 
-  // Dynamically recompute visuals based on sliced rows
+  // Dynamically recompute visual data based on chosen X-Axis, Y-Axis metrics & Slicers
   const dynamicVisuals = useMemo(() => {
     if (!dashboardData?.columns || slicedRows.length === 0) {
       return {
         primaryData: [],
         donutData: [],
-        kpis: dashboardData?.kpis || []
+        xKey: '',
+        yKeys: [],
+        title: ''
       };
     }
 
-    const numericCols = dashboardData.columns.filter(c => c.type === 'numeric').map(c => c.name);
-    const textCols = dashboardData.columns.filter(c => c.type !== 'numeric').map(c => c.name);
+    const cols = dashboardData.columns;
+    const textCols = cols.filter(c => c.type !== 'numeric').map(c => c.name);
+    const numCols = cols.filter(c => c.type === 'numeric').map(c => c.name);
 
-    if (numericCols.length > 0 && textCols.length > 0) {
-      const primaryDim = textCols[0];
-      const secondaryDim = textCols[1] || textCols[0];
-      const metric = numericCols[0];
+    // Chosen X Dimension
+    const xKey = customXAxis || textCols[0] || cols[0]?.name || 'Dimension';
+    const secondaryDim = textCols.find(c => c !== xKey) || textCols[0] || xKey;
 
-      // Primary group
-      const grp = {};
-      slicedRows.forEach(r => {
-        const key = String(r[primaryDim] || 'Other').trim();
-        if (!grp[key]) grp[key] = { [primaryDim]: key };
-        numericCols.slice(0, 3).forEach(nc => {
-          grp[key][nc] = (grp[key][nc] || 0) + (Number(r[nc]) || 0);
+    // Chosen Y Metrics
+    const selectedNumeric = customYAxis.filter(y => numCols.includes(y));
+    const isCountMode = customYAxis.includes('Record Count') || selectedNumeric.length === 0;
+
+    const groupMap = {};
+    const groupCount = {};
+
+    slicedRows.forEach(r => {
+      const xVal = r[xKey] !== null && r[xKey] !== undefined ? String(r[xKey]).trim() : 'Unknown';
+      if (!groupMap[xVal]) {
+        groupMap[xVal] = { [xKey]: xVal };
+        groupCount[xVal] = 0;
+      }
+      groupCount[xVal] += 1;
+
+      if (isCountMode) {
+        groupMap[xVal]['Record Count'] = (groupMap[xVal]['Record Count'] || 0) + 1;
+      } else {
+        selectedNumeric.forEach(m => {
+          const num = Number(r[m]) || 0;
+          if (aggFunction === 'SUM') {
+            groupMap[xVal][m] = (groupMap[xVal][m] || 0) + num;
+          } else if (aggFunction === 'MAX') {
+            groupMap[xVal][m] = Math.max(groupMap[xVal][m] !== undefined ? groupMap[xVal][m] : -Infinity, num);
+          } else if (aggFunction === 'MIN') {
+            groupMap[xVal][m] = Math.min(groupMap[xVal][m] !== undefined ? groupMap[xVal][m] : Infinity, num);
+          } else if (aggFunction === 'AVG') {
+            groupMap[xVal][m] = (groupMap[xVal][m] || 0) + num;
+          }
+        });
+      }
+    });
+
+    // Finalize Averages
+    if (aggFunction === 'AVG' && !isCountMode) {
+      Object.keys(groupMap).forEach(k => {
+        selectedNumeric.forEach(m => {
+          groupMap[k][m] = Math.round((groupMap[k][m] / (groupCount[k] || 1)) * 100) / 100;
         });
       });
-
-      // Secondary donut
-      const dGrp = {};
-      slicedRows.forEach(r => {
-        const key = String(r[secondaryDim] || 'Other').trim();
-        dGrp[key] = (dGrp[key] || 0) + (Number(r[metric]) || 1);
-      });
-
-      return {
-        primaryData: Object.values(grp),
-        donutData: Object.entries(dGrp).map(([name, value]) => ({ name, value: Math.round(value * 100) / 100 })),
-        primaryXKey: primaryDim,
-        primaryYKeys: numericCols.slice(0, 3),
-        primaryTitle: `${numericCols.join(' & ').replace(/_/g, ' ')} by ${primaryDim.replace(/_/g, ' ')}`,
-        donutTitle: `${metric.replace(/_/g, ' ')} Share by ${secondaryDim.replace(/_/g, ' ')}`
-      };
-    } else if (textCols.length > 0) {
-      const primaryDim = textCols[0];
-      const secondaryDim = textCols[1] || textCols[0];
-
-      // Primary frequency
-      const f1 = {};
-      slicedRows.forEach(r => {
-        const key = String(r[primaryDim] || 'Unknown').trim();
-        f1[key] = (f1[key] || 0) + 1;
-      });
-
-      // Secondary frequency
-      const f2 = {};
-      slicedRows.forEach(r => {
-        const key = String(r[secondaryDim] || 'Unknown').trim();
-        f2[key] = (f2[key] || 0) + 1;
-      });
-
-      return {
-        primaryData: Object.entries(f1).map(([k, v]) => ({ [primaryDim]: k, 'Record Count': v })),
-        donutData: Object.entries(f2).map(([name, value]) => ({ name, value })),
-        primaryXKey: primaryDim,
-        primaryYKeys: ['Record Count'],
-        primaryTitle: `Record Volume by ${primaryDim.replace(/_/g, ' ').toUpperCase()}`,
-        donutTitle: `Distribution by ${secondaryDim.replace(/_/g, ' ').toUpperCase()}`
-      };
-    } else {
-      return {
-        primaryData: slicedRows.map((r, i) => ({ Index: `Row ${i + 1}`, ...r })),
-        donutData: [],
-        primaryXKey: 'Index',
-        primaryYKeys: numericCols.slice(0, 3),
-        primaryTitle: 'Metrics Distribution',
-        donutTitle: ''
-      };
     }
-  }, [dashboardData?.columns, slicedRows]);
+
+    const primaryData = Object.values(groupMap);
+    const activeYKeys = isCountMode ? ['Record Count'] : selectedNumeric;
+
+    // Secondary Donut Share Data (on secondary dimension)
+    const donutMap = {};
+    slicedRows.forEach(r => {
+      const dKey = r[secondaryDim] !== null && r[secondaryDim] !== undefined ? String(r[secondaryDim]).trim() : 'Unknown';
+      const metricVal = !isCountMode && selectedNumeric.length > 0 ? (Number(r[selectedNumeric[0]]) || 1) : 1;
+      donutMap[dKey] = (donutMap[dKey] || 0) + metricVal;
+    });
+
+    const donutData = Object.entries(donutMap).map(([name, value]) => ({
+      name,
+      value: Math.round(value * 100) / 100
+    }));
+
+    return {
+      primaryData,
+      donutData,
+      xKey,
+      yKeys: activeYKeys,
+      title: `${aggFunction} of ${activeYKeys.join(', ').replace(/_/g, ' ')} by ${xKey.replace(/_/g, ' ')}`,
+      donutTitle: `${activeYKeys[0] || 'Share'} by ${secondaryDim.replace(/_/g, ' ')}`
+    };
+  }, [dashboardData?.columns, slicedRows, customXAxis, customYAxis, aggFunction]);
 
   // Export Table Rows to CSV
   const handleExportCsv = () => {
@@ -282,6 +314,18 @@ export default function PowerBIViewer({ onNavigate }) {
     link.href = url;
     link.download = `${(dashboardData.question || 'sql_query').replace(/\s+/g, '_')}_results.csv`;
     link.click();
+  };
+
+  // Reset to smart best defaults
+  const handleResetBestAxis = () => {
+    if (!dashboardData?.columns) return;
+    const cols = dashboardData.columns;
+    const textCols = cols.filter(c => c.type !== 'numeric').map(c => c.name);
+    const numCols = cols.filter(c => c.type === 'numeric').map(c => c.name);
+
+    setCustomXAxis(textCols[0] || cols[0]?.name || '');
+    setCustomYAxis(numCols.length > 0 ? numCols.slice(0, 2) : ['Record Count']);
+    setAggFunction('SUM');
   };
 
   // Generate DAX with Copilot for active SQL columns
@@ -358,6 +402,20 @@ export default function PowerBIViewer({ onNavigate }) {
         {/* Right: 1-Click Power BI Export & Automation Actions */}
         <div className="flex items-center space-x-2 shrink-0">
           
+          {/* Visual Customizer Button */}
+          <button
+            onClick={() => setShowFieldCustomizer(!showFieldCustomizer)}
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center space-x-1.5 cursor-pointer shadow-sm ${
+              showFieldCustomizer
+                ? 'bg-indigo-600 text-white font-extrabold'
+                : 'bg-[#22242c] hover:bg-[#2b2e38] text-indigo-300 border border-indigo-500/40'
+            }`}
+            title="Customize X-Axis, Y-Axis Metrics & Aggregation"
+          >
+            <Settings2 className="w-3.5 h-3.5" />
+            <span>Customize Visuals</span>
+          </button>
+
           {/* ⚡ 1-Click Open in Power BI Desktop */}
           <button
             onClick={handleDownloadPbids}
@@ -440,6 +498,94 @@ export default function PowerBIViewer({ onNavigate }) {
           <span>{isEditingSql ? 'Hide SQL Bar' : 'Custom SQL'}</span>
         </button>
       </div>
+
+      {/* Visual Customizer Panel (X-Axis, Y-Axis, Aggregation Method) */}
+      {showFieldCustomizer && dashboardData?.columns && (
+        <div className="bg-[#181a24] border-b border-[#2e323c] p-4 flex flex-wrap items-center gap-4 text-xs animate-fadeIn shrink-0 shadow-inner">
+          
+          {/* X-Axis Dimension */}
+          <div className="flex items-center space-x-2">
+            <span className="font-extrabold text-amber-300 uppercase tracking-wider text-[11px]">X-Axis Dimension:</span>
+            <select
+              value={customXAxis}
+              onChange={(e) => setCustomXAxis(e.target.value)}
+              className="bg-[#101216] border border-[#343844] rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-amber-400 font-medium"
+            >
+              {dashboardData.columns.map(col => (
+                <option key={col.name} value={col.name}>
+                  {col.name} ({col.type})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Y-Axis Metrics */}
+          <div className="flex items-center space-x-2">
+            <span className="font-extrabold text-indigo-300 uppercase tracking-wider text-[11px]">Y-Axis Metric(s):</span>
+            <div className="flex items-center space-x-1.5 bg-[#101216] border border-[#343844] rounded-lg p-1">
+              <button
+                onClick={() => {
+                  setCustomYAxis(['Record Count']);
+                }}
+                className={`px-2 py-0.5 rounded text-[11px] font-bold transition ${
+                  customYAxis.includes('Record Count') ? 'bg-indigo-500 text-white' : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                Record Count
+              </button>
+
+              {dashboardData.columns.filter(c => c.type === 'numeric').map(c => {
+                const isSelected = customYAxis.includes(c.name);
+                return (
+                  <button
+                    key={c.name}
+                    onClick={() => {
+                      setCustomYAxis(prev => {
+                        const clean = prev.filter(y => y !== 'Record Count');
+                        if (clean.includes(c.name)) {
+                          const next = clean.filter(y => y !== c.name);
+                          return next.length > 0 ? next : ['Record Count'];
+                        }
+                        return [...clean, c.name];
+                      });
+                    }}
+                    className={`px-2 py-0.5 rounded text-[11px] font-bold transition ${
+                      isSelected ? 'bg-amber-500 text-black' : 'text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    {c.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Aggregation Function */}
+          <div className="flex items-center space-x-2">
+            <span className="font-extrabold text-emerald-300 uppercase tracking-wider text-[11px]">Calculation:</span>
+            <select
+              value={aggFunction}
+              onChange={(e) => setAggFunction(e.target.value)}
+              className="bg-[#101216] border border-[#343844] rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-emerald-400 font-bold"
+            >
+              <option value="SUM">SUM (Total)</option>
+              <option value="AVG">AVERAGE (Mean)</option>
+              <option value="COUNT">COUNT (Frequency)</option>
+              <option value="MAX">MAX (Maximum)</option>
+              <option value="MIN">MIN (Minimum)</option>
+            </select>
+          </div>
+
+          {/* Reset Best Axis Button */}
+          <button
+            onClick={handleResetBestAxis}
+            className="px-3 py-1.5 bg-[#242834] hover:bg-[#2e3342] text-zinc-300 hover:text-white border border-[#383f50] rounded-lg text-xs font-bold flex items-center gap-1 transition ml-auto"
+          >
+            <RotateCcw className="w-3 h-3" />
+            <span>Reset Best Axis</span>
+          </button>
+        </div>
+      )}
 
       {/* Custom SQL Query Editor Drawer */}
       {isEditingSql && (
@@ -565,15 +711,15 @@ export default function PowerBIViewer({ onNavigate }) {
             {/* Multi-Visual Power BI Layout: Visual 1 (Bar/Line) + Visual 2 (Donut) */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               
-              {/* Visual 1: Primary Aggregated Chart */}
+              {/* Visual 1: Primary Aggregated Chart with Custom Axis & Metrics */}
               <div className="lg:col-span-2 bg-[#181a20] border border-[#2a2d36] rounded-2xl p-5 shadow-md space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#262832] pb-3">
                   <div>
                     <h3 className="text-sm font-extrabold text-white">
-                      {dynamicVisuals.primaryTitle || 'Primary Visual Analytics'}
+                      {dynamicVisuals.title || 'Primary Visual Analytics'}
                     </h3>
                     <p className="text-xs text-zinc-400">
-                      Grouped distribution for <code className="text-amber-300 font-mono">{dynamicVisuals.primaryXKey || 'Dimensions'}</code>
+                      Dimension: <code className="text-amber-300 font-mono font-bold">{dynamicVisuals.xKey || 'X-Axis'}</code> | Metrics: <code className="text-indigo-300 font-mono">{dynamicVisuals.yKeys?.join(', ')}</code>
                     </p>
                   </div>
 
@@ -605,22 +751,22 @@ export default function PowerBIViewer({ onNavigate }) {
                     {activeChartType === 'line' ? (
                       <LineChart data={dynamicVisuals.primaryData} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#262a34" />
-                        <XAxis dataKey={dynamicVisuals.primaryXKey} stroke="#71717a" fontSize={11} tickLine={false} />
+                        <XAxis dataKey={dynamicVisuals.xKey} stroke="#71717a" fontSize={11} tickLine={false} />
                         <YAxis stroke="#71717a" fontSize={11} tickLine={false} />
                         <Tooltip contentStyle={{ backgroundColor: '#181a20', borderColor: '#343844', borderRadius: '12px', fontSize: '12px' }} />
                         <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                        {dynamicVisuals.primaryYKeys?.map((k, i) => (
+                        {dynamicVisuals.yKeys?.map((k, i) => (
                           <Line key={k} type="monotone" dataKey={k} stroke={PALETTE[i % PALETTE.length]} strokeWidth={2.5} dot={{ r: 3 }} />
                         ))}
                       </LineChart>
                     ) : (
                       <BarChart data={dynamicVisuals.primaryData} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#262a34" />
-                        <XAxis dataKey={dynamicVisuals.primaryXKey} stroke="#71717a" fontSize={11} tickLine={false} />
+                        <XAxis dataKey={dynamicVisuals.xKey} stroke="#71717a" fontSize={11} tickLine={false} />
                         <YAxis stroke="#71717a" fontSize={11} tickLine={false} />
                         <Tooltip contentStyle={{ backgroundColor: '#181a20', borderColor: '#343844', borderRadius: '12px', fontSize: '12px' }} />
                         <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                        {dynamicVisuals.primaryYKeys?.map((k, i) => (
+                        {dynamicVisuals.yKeys?.map((k, i) => (
                           <Bar key={k} dataKey={k} fill={PALETTE[i % PALETTE.length]} radius={[6, 6, 0, 0]} />
                         ))}
                       </BarChart>
